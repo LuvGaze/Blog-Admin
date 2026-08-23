@@ -28,7 +28,7 @@ cp .env.example .env   # 然后编辑 .env
 pnpm dev
 ```
 
-打开 `http://localhost:3344` 访问后台，使用 `.env` 中配置的 `ADMIN_PASSWORD` 登录。
+打开 `http://localhost:8899` 访问后台，使用 `.env` 中配置的 `ADMIN_PASSWORD` 登录。
 
 ### 环境变量（admin/.env）
 
