@@ -90,6 +90,11 @@ export interface ContentModuleDef {
   sortOrder?: "asc" | "desc";
   /** 列表排序字段（frontmatter key，依次作为主/次排序键），缺省按文件名 */
   sortKeys?: string[];
+  /**
+   * 自定义列表排序钩子（优先于 sortOrder/sortKeys）。
+   * 用于状态顺序（在读>读过>想读>搁置>抛弃）等无法用简单字段排序表达的规则。
+   */
+  sortItems?: (items: ContentListItem[]) => ContentListItem[];
   fields: FieldDef[];
   /**
    * 写回前归一化钩子：修改 values 与删除字段清单

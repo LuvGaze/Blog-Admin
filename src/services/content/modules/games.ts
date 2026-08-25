@@ -3,6 +3,7 @@
  * 路径：src/content/games/*.md；有正文；category 固定 game
  */
 import type { ContentModuleDef } from "../../../types/content.js";
+import { statusScoreSort } from "../statusSort.js";
 
 /** 游戏条目 frontmatter 数据结构 */
 export interface GameData {
@@ -32,6 +33,7 @@ export const gamesModule: ContentModuleDef = {
   isSingleFile: false,
   hasBody: true,
   titleField: "title",
+  sortItems: statusScoreSort(),
   fields: [
     { key: "title", label: "游戏名称", type: "string", required: true },
     { key: "category", label: "分类标识", type: "string", hidden: true, fixed: "game", help: "固定为 game，禁止修改" },

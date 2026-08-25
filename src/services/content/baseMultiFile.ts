@@ -101,6 +101,9 @@ export class MultiFileContentService implements ContentService {
         error: parsed.error,
       };
     });
+    if (this.meta.sortItems) {
+      return this.meta.sortItems(items);
+    }
     if (this.meta.sortOrder) {
       const keys = this.meta.sortKeys?.length ? this.meta.sortKeys : ["filename"];
       items.sort((a, b) => {

@@ -3,6 +3,7 @@
  * 路径：src/content/movies/*.md；有正文；category 固定 real；subcategory 枚举
  */
 import type { ContentModuleDef } from "../../../types/content.js";
+import { statusScoreSort } from "../statusSort.js";
 
 /** 影视条目 frontmatter 数据结构 */
 export interface MovieData {
@@ -40,6 +41,7 @@ export const moviesModule: ContentModuleDef = {
   isSingleFile: false,
   hasBody: true,
   titleField: "title",
+  sortItems: statusScoreSort({ movie: 0, tv: 1, anime: 2, documentary: 3 }),
   fields: [
     { key: "title", label: "影视名称", type: "string", required: true },
     { key: "category", label: "一级分类", type: "string", hidden: true, fixed: "real", help: "固定为 real，禁止修改" },

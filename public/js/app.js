@@ -386,10 +386,10 @@ function renderPlanCards(data) {
     .map((it) => {
       const f = it.fields || {};
       return `<div class="plan-card" data-open="${esc(it.id)}">
-        <div class="plc-icon">${f.icon ? esc(f.icon) : "📋"}</div>
+        <div class="plc-icon">${f.cover ? `<img src="${esc(f.cover)}" alt="" loading="lazy" onerror="this.remove()">` : "📋"}</div>
         <div class="plc-name">${esc(it.title)}${it.error ? `<span class="badge">⚠</span>` : ""}</div>
         ${f.description ? `<div class="plc-desc">${esc(f.description)}</div>` : ""}
-        <div class="plc-meta">${f.time ? `🕐 ${esc(f.time)}` : ""}${f.updatedAt ? ` · 更新 ${esc(f.updatedAt)}` : ""}</div>
+        <div class="plc-meta">${f.time ? `🕐 ${esc(f.time)}` : ""}${f.updated ? ` · 更新 ${esc(f.updated)}` : ""}</div>
         ${cardActions(it)}
       </div>`;
     })
@@ -516,6 +516,13 @@ function previewUrl(itemId, nbId) {
   return `${base}${prefix}/`;
 }
 
+/** 当天日期（YYYY-MM-DD，本地时区），用于新建内容时日期字段的默认值 */
+function todayStr() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function fieldControlHtml(field, value, opts = {}) {
   const v = value === undefined || value === null ? "" : value;
   if (field.enum && field.enum.length) {
@@ -575,7 +582,16 @@ function renderContentForm(detail, isNew) {
       }
       const req = f.required ? `<span class="req">*</span>` : "";
       const help = f.help ? `<span class="help">${esc(f.help)}</span>` : "";
-      let control = fieldControlHtml(f, isNew && f.defaultValue !== undefined ? f.defaultValue : v);
+      let initialValue = v;
+      if (isNew) {
+        if (f.defaultValue !== undefined) {
+          initialValue = f.defaultValue;
+        } else if (f.type === "date" && !v) {
+          // 新建时日期字段默认填入当天，避免浏览器显示 yyyy/mm/日 占位符
+          initialValue = todayStr();
+        }
+      }
+      let control = fieldControlHtml(f, initialValue);
       if (f.type === "url" && f.media && typeof v === "string" && v) {
         control += mediaPreviewHtml(v);
       }
@@ -1000,7 +1016,9 @@ async function openNoteForm(notebookId, noteId, isEdit = false) {
   const fields = state.module.noteFields || [];
   const rows = fields
     .map((f) => {
-      const v = detail ? detail.fields[f.key] : undefined;
+      let v = detail ? detail.fields[f.key] : undefined;
+      // 新建笔记时日期字段默认填入当天，避免浏览器显示 yyyy/mm/日 占位符
+      if (!isEdit && f.type === "date" && !v) v = todayStr();
       const req = f.required ? `<span class="req">*</span>` : "";
       const help = f.help ? `<span class="help">${esc(f.help)}</span>` : "";
       let control = fieldControlHtml(f, v);
