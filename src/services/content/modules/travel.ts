@@ -11,6 +11,10 @@ export interface TravelData {
   province: string;
   city: string;
   visitCount: number;
+  /** 纬度（可选）：留空时前端会尝试用配置的高德 Key 自动地理编码获取坐标 */
+  lat?: number;
+  /** 经度（可选）：留空时前端会尝试用配置的高德 Key 自动地理编码获取坐标 */
+  lng?: number;
 }
 
 export const travelModule: ContentModuleDef = {
@@ -29,6 +33,8 @@ export const travelModule: ContentModuleDef = {
     { key: "province", label: "省份", type: "string", required: true },
     { key: "city", label: "城市", type: "string", required: true },
     { key: "visitCount", label: "到访次数", type: "positiveInt", required: true, help: "只允许大于 0 的正整数" },
+    { key: "lat", label: "纬度 (lat)", type: "number", required: false, help: "可选。留空时前端会用高德地理编码自动获取坐标" },
+    { key: "lng", label: "经度 (lng)", type: "number", required: false, help: "可选。留空时前端会用高德地理编码自动获取坐标" },
   ],
   // 与现有足迹文件一致：字符串无引号、日期无引号
   yamlFormat: { quote: "none", arrayStyle: "flow", arrayItemQuote: "none" },

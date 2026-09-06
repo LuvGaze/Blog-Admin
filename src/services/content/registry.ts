@@ -17,6 +17,7 @@ import { moviesModule } from "./modules/movies.js";
 import { plansModule } from "./modules/plans.js";
 import { postsModule } from "./modules/posts.js";
 import { travelModule } from "./modules/travel.js";
+import { billsModule } from "./modules/bills.js";
 
 /**
  * notebooks 特殊模块元数据（仅用于侧边栏排序与清单展示）
@@ -44,6 +45,7 @@ export const contentModules: ContentModuleDef[] = [
   friendsModule,    /** 友链 */
   plansModule,      /** 规划 */
   travelModule,     /** 旅行 */
+  billsModule,      /** 账单 */
   websiteModule,    /** 网站导航 */
   changelogModule,  /** 更新日志 */
   aboutModule,      /** 关于我 */
