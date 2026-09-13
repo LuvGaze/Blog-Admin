@@ -107,6 +107,10 @@ export class MultiFileContentService implements ContentService {
     if (this.meta.sortOrder) {
       const keys = this.meta.sortKeys?.length ? this.meta.sortKeys : ["filename"];
       items.sort((a, b) => {
+        // 手动 order 优先（越大越靠前），再按 sortKeys 排序（与前端 compareOrderThenDate 逻辑一致）
+        const ao = Number(a.fields?.["order"]) || 0;
+        const bo = Number(b.fields?.["order"]) || 0;
+        if (ao !== bo) return bo - ao;
         for (const key of keys) {
           const av = String(a.fields[key] ?? a.filename ?? "");
           const bv = String(b.fields[key] ?? b.filename ?? "");

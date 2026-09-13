@@ -32,6 +32,7 @@ export const galleryModule: ContentModuleDef = {
     { key: "location", label: "拍摄地点", type: "string" },
     { key: "date", label: "相册时间", type: "date" },
     { key: "tags", label: "标签", type: "stringArray" },
+    { key: "order", label: "手动排序", type: "number", required: false, help: "越大越靠前；不填则按日期从新到旧排" },
     {
       key: "password",
       label: "访问密码",

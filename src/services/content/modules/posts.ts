@@ -30,10 +30,13 @@ export const postsModule: ContentModuleDef = {
   isSingleFile: false,
   hasBody: true,
   titleField: "title",
+  sortOrder: "desc",
+  sortKeys: ["published"],
   fields: [
     { key: "title", label: "文章标题", type: "string", required: true },
     { key: "published", label: "发布日期", type: "date", required: true },
     { key: "pinned", label: "置顶", type: "boolean", defaultValue: false, help: "true 置顶展示" },
+    { key: "order", label: "手动排序", type: "number", required: false, help: "大于 0 时优先于日期排序，值越大越靠前；不填则按日期从新到旧排" },
     { key: "description", label: "文章简介", type: "string" },
     { key: "tags", label: "标签", type: "stringArray" },
     { key: "category", label: "文章分类", type: "string" },

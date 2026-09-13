@@ -46,6 +46,7 @@ export const billsModule: ContentModuleDef = {
     { key: "account", label: "账户", type: "string", defaultValue: "其他", help: "例如 支付宝、微信、银行卡" },
     { key: "date", label: "账单日期", type: "date", required: true },
     { key: "time", label: "账单时间", type: "time", help: "格式 HH:mm，例如 09:00" },
+    { key: "order", label: "手动排序", type: "number", required: false, help: "越大越靠前；不填则按日期从新到旧排" },
     { key: "description", label: "备注", type: "string", defaultValue: "" },
     { key: "tags", label: "标签", type: "stringArray", defaultValue: [] },
   ],

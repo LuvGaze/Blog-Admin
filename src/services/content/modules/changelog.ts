@@ -36,6 +36,7 @@ export const changelogModule: ContentModuleDef = {
     { key: "date", label: "发布日期", type: "date", required: true },
     { key: "time", label: "发布时间", type: "time", required: true },
     { key: "type", label: "更新类型", type: "string", required: true, enum: TYPE },
+    { key: "order", label: "手动排序", type: "number", required: false, help: "越大越靠前；不填则按日期从新到旧排" },
     { key: "description", label: "版本概述", type: "string", required: true, help: "版本简短一句话概述" },
   ],
   // 与现有更新日志文件一致：全部双引号（含日期）

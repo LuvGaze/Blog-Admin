@@ -35,6 +35,7 @@ export const plansModule: ContentModuleDef = {
     { key: "cover", label: "封面图片", type: "string", help: "图片 URL，展示在卡片图标位置" },
     { key: "description", label: "规划描述", type: "string" },
     { key: "updated", label: "更新日期", type: "date", required: true, help: "新建时自动填充为当前日期" },
+    { key: "order", label: "手动排序", type: "number", required: false, help: "越大越靠前；不填则按更新日期从新到旧排" },
   ],
   // 与现有规划文件一致：全部无引号（含日期）
   yamlFormat: { quote: "none", arrayStyle: "flow", arrayItemQuote: "none" },

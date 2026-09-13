@@ -35,6 +35,7 @@ export const travelModule: ContentModuleDef = {
     { key: "visitCount", label: "到访次数", type: "positiveInt", required: true, help: "只允许大于 0 的正整数" },
     { key: "lat", label: "纬度 (lat)", type: "number", required: false, help: "可选。留空时前端会用高德地理编码自动获取坐标" },
     { key: "lng", label: "经度 (lng)", type: "number", required: false, help: "可选。留空时前端会用高德地理编码自动获取坐标" },
+    { key: "order", label: "手动排序", type: "number", required: false, help: "越大越靠前；不填则按日期从新到旧排" },
   ],
   // 与现有足迹文件一致：字符串无引号、日期无引号
   yamlFormat: { quote: "none", arrayStyle: "flow", arrayItemQuote: "none" },
