@@ -30,17 +30,12 @@ pnpm dev
 
 ### 环境变量（admin/.env）
 
-<table>
-  <thead>
-    <tr><th>变量</th><th>说明</th><th>默认值</th></tr>
-  </thead>
-  <tbody>
-    <tr><td><code>PORT</code></td><td>后台服务端口</td><td><code>3344</code></td></tr>
-    <tr><td><code>ADMIN_PASSWORD</code></td><td>管理密码（登录鉴权）</td><td>无（必填）</td></tr>
-    <tr><td><code>ADMIN_SECRET</code></td><td>Token 签名密钥，留空则每次启动随机生成</td><td>空</td></tr>
-    <tr><td><code>BLOG_BASE_URL</code></td><td>博客站点地址（后台「预览」按钮跳转用）</td><td><code>http://localhost:4321</code></td></tr>
-  </tbody>
-</table>
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| `PORT` | 后台服务端口 | `3344` |
+| `ADMIN_PASSWORD` | 管理密码（登录鉴权） | 无（必填） |
+| `ADMIN_SECRET` | Token 签名密钥，留空则每次启动随机生成 | 空 |
+| `BLOG_BASE_URL` | 博客站点地址（后台「预览」按钮跳转用） | `http://localhost:4321` |
 
 > `ADMIN_PASSWORD` 未配置时优先读取项目根目录 `.env` 中的同名变量（兼容约定，只读不写）。
 
@@ -63,7 +58,7 @@ admin/
 │   ├── index.html          # 单页入口：登录 / 内容管理 / 配置管理
 │   ├── css/kraft.css       # 牛皮纸主题样式
 │   ├── js/app.js           # 前端逻辑（API 调用、表单渲染、预览跳转）
-│   ├── read.md             # 可选：未选择模块/配置时右侧面板渲染的欢迎内容（Markdown，内置渲染器）
+│   ├── read.md             # 可选：右侧面板承载的欢迎内容（内置 Markdown 渲染器）
 │   └── read.html           # 可选：同上（HTML 版本；与 read.md 同名时优先渲染 read.md。经 iframe 独立加载，内部 <style>/<script> 不会污染后台全局）
 ├── src/
 │   ├── app.ts              # Express 应用装配（静态资源 + API 路由）
@@ -77,8 +72,8 @@ admin/
 │   │   │   ├── baseMultiFile.ts  # 通用 md/md json 模块服务（列表/读取/新建/保存/删除/备份）
 │   │   │   ├── notebooksService.ts
 │   │   │   └── modules/          # 各模块字段定义（books/games/movies/changelog/website/friends/gallery/plans/posts/travel/about）
-│   │   ├── config/         # 配置目标注册（tsConfig / profileConfig / FooterConfig ...）
-│   │   ├── tsAstService.ts # TS 配置文件的 AST 编辑
+│   │   ├── config/         # 配置目标注册（见下方「配置管理」）
+│   │   ├── tsAstService.ts # TS 配置文件的 AST 读取、更新与「新增缺失字段」
 │   │   └── yamlService.ts  # YAML frontmatter 解析与归一化
 │   ├── types/              # 内容模块与公共类型定义
 │   ├── utils/              # 文件读写 / 备份 / 校验 / 日志 / 错误
@@ -95,48 +90,58 @@ admin/
 
 后台「内容管理」支持以下模块（数据源均为博客 `src/content/` 下的真实文件）：
 
-<table>
-  <thead>
-    <tr><th>模块 ID</th><th>名称</th><th>目录</th><th>预览前缀</th><th>说明</th></tr>
-  </thead>
-  <tbody>
-    <tr><td><code>books</code></td><td>书架</td><td><code>books/</code></td><td><code>/books/</code></td><td>书籍条目（category=book）</td></tr>
-    <tr><td><code>games</code></td><td>游戏</td><td><code>games/</code></td><td><code>/games/</code></td><td>游戏条目（category=game）</td></tr>
-    <tr><td><code>movies</code></td><td>影视</td><td><code>movies/</code></td><td><code>/movies/</code></td><td>影视条目（category=real）</td></tr>
-    <tr><td><code>changelog</code></td><td>更新日志</td><td><code>changelog/</code></td><td><code>/changelog/</code></td><td>版本日志，列表按日期倒序</td></tr>
-    <tr><td><code>website</code></td><td>网站导航</td><td><code>website/</code></td><td><code>/website/</code></td><td>友链/常用网站导航</td></tr>
-    <tr><td><code>friends</code></td><td>友链</td><td><code>friends/</code></td><td><code>/friends/</code></td><td>友情链接</td></tr>
-    <tr><td><code>gallery</code></td><td>相册</td><td><code>gallery/</code></td><td><code>/gallery/</code></td><td>相册集</td></tr>
-    <tr><td><code>plans</code></td><td>日常规划</td><td><code>plans/</code></td><td><code>/life/routines/</code></td><td>规划条目</td></tr>
-    <tr><td><code>posts</code></td><td>文章</td><td><code>posts/</code></td><td><code>/posts/</code></td><td>博客文章</td></tr>
-    <tr><td><code>travel</code></td><td>足迹</td><td><code>travel/</code></td><td><code>/travel/</code></td><td>到访地点（visitCount 正整数校验）</td></tr>
-    <tr><td><code>about</code></td><td>关于</td><td><code>spec/about.md</code></td><td><code>/about/</code></td><td>单文件正文</td></tr>
-    <tr><td><code>notebooks</code></td><td>笔记本</td><td><code>notebooks/</code></td><td><code>/notebooks/</code></td><td>目录 + <code>_index.json</code> + 笔记（专用服务）</td></tr>
-  </tbody>
-</table>
+| 模块 ID | 名称 | 目录 | 预览前缀 | 说明 |
+| --- | --- | --- | --- | --- |
+| `books` | 书架 | `books/` | `/books/` | 书籍条目（category=book） |
+| `games` | 游戏 | `games/` | `/games/` | 游戏条目（category=game） |
+| `movies` | 影视 | `movies/` | `/movies/` | 影视条目（category=real） |
+| `changelog` | 更新日志 | `changelog/` | `/changelog/` | 版本日志，列表按日期倒序 |
+| `website` | 网站导航 | `website/` | `/website/` | 常用网站导航 |
+| `friends` | 友链 | `friends/` | `/friends/` | 友情链接 |
+| `gallery` | 相册 | `gallery/` | `/gallery/` | 相册集 |
+| `plans` | 日常规划 | `plans/` | `/life/routines/` | 规划条目 |
+| `posts` | 文章 | `posts/` | `/posts/` | 博客文章 |
+| `travel` | 足迹 | `travel/` | `/travel/` | 到访地点（visitCount 正整数校验） |
+| `about` | 关于 | `spec/about.md` | `/about/` | 单文件正文 |
+| `notebooks` | 笔记本 | `notebooks/` | `/notebooks/` | 目录 + `_index.json` + 笔记（专用服务） |
 
-新增/修改模块：在 `src/services/content/modules/` 下创建模块定义文件，并在 `registry.ts` 中注册即可。侧边栏模块顺序 = `registry.ts` 中 `contentModules` 数组顺序（notebooks 已包含在内），调整顺序只需移动数组元素。
+新增/修改模块：在 `src/services/content/modules/` 下创建模块定义文件，并在 `registry.ts` 中注册即可。侧边栏模块顺序 = `registry.ts` 中 `contentModules` 数组顺序，调整顺序只需移动数组元素。
+
+## 配置管理
+
+后台「配置管理」读取 `src/config/` 下的 TypeScript 配置文件（每个配置对应用户界面上的一个「配置目标」），顶层对象与数组字段全部可视化编辑。当前支持的配置目标见 `services/config/targets.ts`，包括但不限于：
+
+- **站点基础**：站点信息、导航栏、赞助、评论、License、底部、页脚
+- **页面布局**：侧边栏布局、音乐播放器、天气预报（新增）
+- **外观**：个人资料（含背景图/头像/字号）、默认封面图
+- **互动功能**：恋爱计时器（新增）、全站访问口令（新增）、公告、壁纸、网站统计等
+
+### 侧边栏组件编辑
+
+「侧边栏布局」配置目标中，每个 `leftComponents / rightComponents` 组件会展开为一个子面板，支持：
+
+- **请勿改动源码即可调整位置**：面板顶部「⚙ 组件位置」快捷控制，选择归属侧（左侧栏/右侧栏）并设置排序（数字越小越靠前），点击「保存位置」即时写入 `side` / `order` 字段。
+- **补充可选字段**：面板底部「＋ 添加可选字段」，可补充 `side`、`order`、`showTitle`、`position`、`showOnPostPage`、`hideOnNonPostPage` 等字段。
+
+> 后台 TS AST 引擎支持为对象数组元素**新增缺失的标量属性**（如侧栏组件的 `side`/`order`），因此「新字段没有被源码初始化」不再是无法编辑的阻碍——直接在后台就能补上。
 
 ## API 概览
 
-<table>
-  <thead>
-    <tr><th>方法</th><th>路径</th><th>说明</th></tr>
-  </thead>
-  <tbody>
-    <tr><td><code>POST</code></td><td><code>/api/auth/login</code></td><td>登录，返回 Bearer Token</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/health</code></td><td>健康检查（含博客地址信息）</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/modules</code></td><td>内容模块清单</td></tr>
-    <tr><td><code>GET / POST</code></td><td><code>/api/content/:module</code></td><td>列表 / 新建条目</td></tr>
-    <tr><td><code>GET / PUT / DELETE</code></td><td><code>/api/content/:module/:id</code></td><td>读取 / 保存 / 删除条目</td></tr>
-    <tr><td><code>GET / POST</code></td><td><code>/api/content/:module/backups</code></td><td>备份列表 / 手动创建整模块备份</td></tr>
-    <tr><td><code>POST</code></td><td><code>/api/content/:module/restore</code></td><td>恢复备份（文件备份 / 目录快照）</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/config</code></td><td>配置目标清单</td></tr>
-    <tr><td><code>GET / POST</code></td><td><code>/api/config/:id</code></td><td>读取 / 保存配置</td></tr>
-  </tbody>
-</table>
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/auth/login` | 登录，返回 Bearer Token |
+| `GET` | `/api/health` | 健康检查（含博客地址信息） |
+| `GET` | `/api/modules` | 内容模块清单 |
+| `GET / POST` | `/api/content/:module` | 列表 / 新建条目 |
+| `GET / PUT / DELETE` | `/api/content/:module/:id` | 读取 / 保存 / 删除条目 |
+| `GET / POST` | `/api/content/:module/backups` | 备份列表 / 手动创建整模块备份 |
+| `POST` | `/api/content/:module/restore` | 恢复备份（文件备份 / 目录快照） |
+| `GET` | `/api/config` | 配置目标清单 |
+| `GET / POST` | `/api/config/:id` | 读取 / 保存配置（body `{ changes: [{ keyPath, value }] }`） |
 
 所有写操作与读取敏感接口均需请求头 `Authorization: Bearer <token>`。
+
+> 保存配置采用「keyPath + value」增量更新：既有字段会按原样式替换；缺失字段（如 `side`）会在目标对象字面量末尾自动补入，无需整文件重写。
 
 ## 备份与恢复
 
@@ -151,5 +156,6 @@ admin/
 
 - 依赖博客项目目录结构：`admin/` 必须与博客项目根目录同级（`admin/../src/content`）。
 - 修改内容后博客需重启 `astro dev` 或重新构建才能看到最新数据（Astro 内容集合缓存）。
+- 修改配置后，若后台 `tsx watch` 尚未热重载而是刷新页面即可看到最新字段。
 - 备份默认存放在 `admin/backup/`，可手动清理。
 - 本项目使用 `pnpm@9.14.4`，`pnpm-workspace.yaml` 需保留 `packages` 与 `onlyBuiltDependencies` 字段，否则依赖安装会失败。

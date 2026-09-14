@@ -1,5 +1,5 @@
 /**
- * 17 个站点配置 target 定义（docs/后端设置Demo/01-17）
+ * 站点配置 target 定义（docs/后端设置Demo/01-17 + 恋爱计时器 + 全站访问口令 + 天气预报）
  * 每个 target 对应 src/config/ 下一个 .ts 配置文件
  * - group：侧边栏分组（组内顺序 = 本数组顺序，调整顺序只需移动数组元素）
  * - mediaPaths：媒体预览字段（[*] 通配数组索引），仅标记不做上传
@@ -27,6 +27,21 @@ export const configTargets: ConfigTargetDef[] = [
     group: "互动功能",
   },
   {
+    id: "relationship",
+    name: "恋爱计时器配置",
+    file: "relationshipConfig.ts",
+    exportNames: ["relationshipConfig"],
+    mediaPaths: ["avatar1", "avatar2", "heartImage"],
+    group: "互动功能",
+  },
+  {
+    id: "access",
+    name: "全站访问口令",
+    file: "accessConfig.ts",
+    exportNames: ["accessConfig"],
+    group: "互动功能",
+  },
+  {
     id: "sidebar",
     name: "侧边栏布局",
     file: "sidebarConfig.ts",
@@ -39,7 +54,7 @@ export const configTargets: ConfigTargetDef[] = [
     name: "个人资料",
     file: "profileConfig.ts",
     exportNames: ["profileConfig"],
-    mediaPaths: ["avatar"],
+    mediaPaths: ["avatar", "style.backgroundImage"],
     group: "基础",
   },
   {
@@ -77,6 +92,13 @@ export const configTargets: ConfigTargetDef[] = [
     file: "musicConfig.ts",
     exportNames: ["musicPlayerConfig"],
     mediaPaths: ["local.playlist[*].cover"],
+    group: "页面布局",
+  },
+  {
+    id: "weather",
+    name: "天气预报配置",
+    file: "weatherConfig.ts",
+    exportNames: ["weatherConfig"],
     group: "页面布局",
   },
   {

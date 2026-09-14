@@ -311,6 +311,11 @@ interface LocatedNode {
   text: string;
 }
 
+/** 写回定位结果：更新已有字段，或新增缺失的标量属性 */
+type WriteTarget =
+  | { kind: "update"; node: ts.Node; text: string }
+  | { kind: "add"; parentObj: ts.ObjectLiteralExpression; key: string; parentText: string };
+
 /** 解析 keyPath 为段：属性名或 [索引] */
 function parseSegments(keyPath: string): Array<{ kind: "prop" | "index"; name?: string; index?: number }> {
   const segs: Array<{ kind: "prop" | "index"; name?: string; index?: number }> = [];
@@ -324,8 +329,11 @@ function parseSegments(keyPath: string): Array<{ kind: "prop" | "index"; name?: 
   return segs;
 }
 
-/** 沿 keyPath 定位到值节点 */
-function locate(sourceFile: ts.SourceFile, def: ConfigTargetDef, keyPath: string): LocatedNode {
+/**
+ * 沿 keyPath 定位到值节点；若末段属性缺失但父级为对象字面量，则返回「新增」目标
+ * （用于后台补充侧栏组件等对象数组元素的 side/order 等可选字段）
+ */
+function locate(sourceFile: ts.SourceFile, def: ConfigTargetDef, keyPath: string): WriteTarget {
   const segs = parseSegments(keyPath);
   let obj: ts.ObjectLiteralExpression | null;
   let segIndex = 0;
@@ -358,14 +366,61 @@ function locate(sourceFile: ts.SourceFile, def: ConfigTargetDef, keyPath: string
         break;
       }
     }
-    if (!found) throw badRequest(`字段不存在：${keyPath}`);
+    if (!found) {
+      // 缺失的后置属性：允许「新增标量字段」
+      if (i === segs.length - 1) {
+        return { kind: "add", parentObj: node, key: seg.name!, parentText: node.getText(sourceFile) };
+      }
+      throw badRequest(`字段不存在：${keyPath}`);
+    }
     if (i === segs.length - 1) {
-      return { node: unwrap(found.initializer), text: found.initializer.getText(sourceFile) };
+      return { kind: "update", node: unwrap(found.initializer), text: found.initializer.getText(sourceFile) };
     }
     node = unwrap(found.initializer);
   }
   // keyPath 只有导出名（无字段）→ 整个对象，禁止整体替换
   throw badRequest(`keyPath 未指向可编辑字段：${keyPath}`);
+}
+
+/** 构造待新增字段的字面量文本（字符串双引号，数字/布尔原样） */
+function newNodeValueLiteral(value: unknown): string {
+  if (typeof value === "string") return `"${escapeDouble(value)}"`;
+  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean") return String(value);
+  if (value === null) return "null";
+  return "";
+}
+
+/**
+ * 生成新增属性的插入文本：在对象字面量最后一个真实属性行的换行后追加，
+ * 保持与现有属性一致的缩进，并补尾逗号。insertPos 为源文件中的绝对位置。
+ */
+function buildAddInsertion(
+  parentObj: ts.ObjectLiteralExpression,
+  key: string,
+  value: unknown,
+  sourceFile: ts.SourceFile,
+): { insertion: string; insertPos: number } {
+  const safeKey = SAFE_BARE.test(key) ? key : `"${escapeDouble(key)}"`;
+  const serialized = newNodeValueLiteral(value);
+  if (!serialized) throw badRequest(`新增字段 ${key} 只支持字符串/数字/布尔/null`);
+  const parentText = parentObj.getText(sourceFile);
+  const lines = parentText.split("\n");
+  const lastLine = lines[lines.length - 1] ?? "";
+  const closeMatch = lastLine.match(/^(\s*)/);
+  const closeIndent = closeMatch ? closeMatch[1] : "";
+  let indent = "\t";
+  for (const ln of lines.slice(1, -1)) {
+    const m = ln.match(/^\s*/);
+    if (m && ln.trim() !== "") {
+      indent = m[0];
+      break;
+    }
+  }
+  // 插入位置：对象字面量闭合大括号 } 之前，closeIndent 缩进起始处
+  const insertPos = parentObj.getEnd() - 1 - closeIndent.length;
+  const insertion = `${indent}${safeKey}: ${serialized},\n`;
+  return { insertion, insertPos };
 }
 
 /**
@@ -384,16 +439,31 @@ export function applyConfigChanges(def: ConfigTargetDef, changes: ConfigChange[]
   const patches: Array<{ start: number; end: number; text: string }> = [];
   for (const change of changes) {
     if (typeof change.keyPath !== "string" || change.keyPath === "") throw badRequest("变更缺少 keyPath");
-    const located = locate(sourceFile, def, change.keyPath);
+    const target = locate(sourceFile, def, change.keyPath);
     let replacement: string;
-    if (Array.isArray(change.value)) {
-      replacement = serializeArray(change.value, located.text);
+    let start: number;
+    let end: number;
+    if (target.kind === "add") {
+      // 新增缺失的标量属性（如侧栏组件的 side/order）
+      if (Array.isArray(change.value)) {
+        throw badRequest(`字段 ${change.keyPath} 尚未定义，数组结构需先在源码初始化后再编辑`);
+      }
+      const { insertion, insertPos } = buildAddInsertion(target.parentObj, target.key, change.value, sourceFile);
+      replacement = insertion;
+      start = insertPos;
+      end = insertPos;
+    } else if (Array.isArray(change.value)) {
+      replacement = serializeArray(change.value, target.text);
+      start = target.node.getStart(sourceFile);
+      end = target.node.getEnd();
     } else {
-      const hasQuote = change.hasQuote ?? hasDoubleQuote(located.node);
-      replacement = serializeScalar(change.value, hasQuote, located.node);
+      const hasQuote = change.hasQuote ?? hasDoubleQuote(target.node);
+      replacement = serializeScalar(change.value, hasQuote, target.node);
+      start = target.node.getStart(sourceFile);
+      end = target.node.getEnd();
+      if (replacement === target.text) continue; // 无变化跳过
     }
-    if (replacement === located.text) continue; // 无变化跳过
-    patches.push({ start: located.node.getStart(sourceFile), end: located.node.getEnd(), text: replacement });
+    patches.push({ start, end, text: replacement });
   }
   if (patches.length === 0) return { saved: 0 };
 

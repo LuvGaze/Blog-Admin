@@ -1286,6 +1286,7 @@ const CFG_WIDGET_ZH = {
   profile: "个人资料", announcement: "公告", categories: "分类", tags: "标签",
   sidebarToc: "侧边目录", advertisement: "广告", stats: "站点统计", calendar: "日历",
   music: "音乐播放器", siteInfo: "站点信息", umamiStats: "Umami 统计", changelog: "更新日志",
+  weather: "天气预报", relationship: "恋爱计时器",
 };
 
 /**
@@ -1449,6 +1450,66 @@ function reindexConfigArray(root) {
   });
 }
 
+/* ============ 全站访问口令：受保护页面快捷勾选 ============ */
+/** 博客可直接勾选受保护的页面栏目（路径前缀 + 展示名） */
+const ACCESS_KNOWN_PAGES = [
+  ["/gallery/", "相册"],
+  ["/books/", "书架"],
+  ["/games/", "游戏"],
+  ["/movies/", "影视"],
+  ["/travel/", "足迹"],
+  ["/plans/", "规划"],
+  ["/notebooks/", "笔记本"],
+  ["/bills/", "账单"],
+  ["/posts/", "全部文章"],
+  ["/about/", "关于"],
+  ["/guestbook/", "留言板"],
+  ["/archive/", "归档"],
+];
+const ACCESS_KNOWN_SET = new Set(ACCESS_KNOWN_PAGES.map((k) => k[0]));
+function normPrefix(p) {
+  let s = String(p).trim();
+  if (s && !s.endsWith("/")) s += "/";
+  return s;
+}
+/** protectedRoutes 专用编辑器：勾选栏目 + 自定义路径前缀两用 */
+function accessPageEditor(entry) {
+  const { keyPath, value } = entry;
+  const items = (Array.isArray(value) ? value : []).map((it) => String(it));
+  const checked = new Set(items.map(normPrefix));
+  const custom = items.filter((p) => !ACCESS_KNOWN_SET.has(normPrefix(p)));
+  const chips = ACCESS_KNOWN_PAGES.map(
+    ([p, label]) => `<label class="acc-chip"><input type="checkbox" data-acc-p="${esc(p)}" ${checked.has(p) ? "checked" : ""}> ${esc(label)}</label>`,
+  ).join("");
+  return `<div class="form-row">
+    <div class="row-head"><label>受保护页面（勾选即保护该栏目下所有页面）</label><span class="kpath">${esc(keyPath)}</span></div>
+    <div class="access-page-box" data-acc-root="${esc(keyPath)}">
+      <div class="acc-chips">${chips || ""}</div>
+      <div class="acc-custom">
+        <div class="acc-hint">自定义路径前缀（以 / 开头，用空格或逗号分隔）：</div>
+        <input type="text" data-acc-custom="${esc(keyPath)}" value="${esc(custom.join(" "))}" placeholder="/custom/page/">
+      </div>
+    </div>
+  </div>`;
+}
+function emitAccessChange(keyPath) {
+  const root = document.querySelector(`[data-acc-root="${CSS.escape(keyPath)}"]`);
+  if (!root) return;
+  const arr = [];
+  root.querySelectorAll("[data-acc-p]").forEach((el) => { if (el.checked) arr.push(el.dataset.accP); });
+  const custom = (root.querySelector("[data-acc-custom]")?.value || "")
+    .split(/[\s,，、;；]+/).map((s) => s.trim()).filter(Boolean);
+  state.changes.set(keyPath, { value: [...arr, ...custom] });
+  refreshConfigSaveCount();
+}
+function bindAccessPageEditor(container) {
+  container.querySelectorAll("[data-acc-root]").forEach((root) => {
+    const key = root.dataset.accRoot;
+    root.querySelectorAll("[data-acc-p]").forEach((el) => (el.onchange = () => emitAccessChange(key)));
+    root.querySelector("[data-acc-custom]").oninput = () => emitAccessChange(key);
+  });
+}
+
 /** 对象数组编辑器：元素卡片 + 增删拖拽（操作即时保存，保持字段一致） */
 function configObjArrayEditor(entry) {
   const { keyPath, value } = entry;
@@ -1544,6 +1605,129 @@ async function persistObjArray(keyPath, arr, doneMsg) {
 }
 
 /* ─────────── 配置管理：面板渲染与保存 ─────────── */
+
+/** 侧栏组件可补充的可选字段（key, 中文名, 默认值，type 用于后台解析输入） */
+const CFG_WIDGET_EXTRA_FIELDS = [
+  { key: "side", label: "归属侧（side）", hint: "left / right：将组件固定到左侧或右侧", def: "" },
+  { key: "order", label: "排序（order）", hint: "同侧内数字越小越靠前", def: 0 },
+  { key: "showTitle", label: "显示标题（showTitle）", hint: "true / false", def: true },
+  { key: "position", label: "位置（position）", hint: "top 固定顶部 / sticky 粘性跟随", def: "top" },
+  { key: "showOnPostPage", label: "文章页显示（showOnPostPage）", hint: "true / false", def: true },
+  { key: "hideOnNonPostPage", label: "非文章页隐藏（hideOnNonPostPage）", hint: "true / false（true=仅文章页显示）", def: true },
+];
+
+/** 是否为侧栏组件元素面板（leftComponents[N] / rightComponents[N]） */
+function isSidebarComponentElem(elemKey) {
+  return /^(?:leftComponents|rightComponents)\[\d+\]$/.test(elemKey);
+}
+
+/** 侧栏组件快速控制：归属侧(left/right) + 排序(order)，无需改源码 */
+function sideQuickControl(elemKey, info) {
+  const sideEnt = (info.entries || []).find((f) => f.keyPath.endsWith(".side"));
+  const orderEnt = (info.entries || []).find((f) => f.keyPath.endsWith(".order"));
+  const defaultSide = elemKey.startsWith("rightComponents") ? "right" : "left";
+  const curSide = sideEnt ? (sideEnt.value === "right" ? "right" : "left") : defaultSide;
+  const curOrder = orderEnt ? orderEnt.value : "";
+  return `<div class="side-quick form-row">
+    <div class="row-head"><label>⚙ 组件位置</label></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <label>归属侧：</label>
+      <select class="side-quick-side" data-side-quick-side="${esc(elemKey)}">
+        <option value="left"${curSide === "left" ? " selected" : ""}>左侧栏</option>
+        <option value="right"${curSide === "right" ? " selected" : ""}>右侧栏</option>
+      </select>
+      <label>排序：</label>
+      <input type="number" class="side-quick-order" data-side-quick-order="${esc(elemKey)}" value="${esc(String(curOrder))}" placeholder="越小越靠前" style="width:84px;">
+      <button type="button" class="btn btn-sm btn-info" data-side-quick-save="${esc(elemKey)}">保存位置</button>
+    </div>
+  </div>`;
+}
+
+/** 绑定侧栏组件快速控制：保存 side / order */
+function bindSideQuick(panel) {
+  panel.querySelectorAll("[data-side-quick-save]").forEach((btn) => {
+    const elemKey = btn.dataset.sideQuickSave;
+    const sideSel = panel.querySelector(`[data-side-quick-side="${CSS.escape(elemKey)}"]`);
+    const orderInp = panel.querySelector(`[data-side-quick-order="${CSS.escape(elemKey)}"]`);
+    btn.onclick = async () => {
+      const side = sideSel ? sideSel.value : "left";
+      let order = orderInp ? parseInt(orderInp.value, 10) : NaN;
+      if (isNaN(order)) order = 0;
+      const changes = [{ keyPath: `${elemKey}.side`, value: side }, { keyPath: `${elemKey}.order`, value: order }];
+      try {
+        await api(`/api/config/${state.target.targetId}`, { method: "POST", body: { changes } });
+        toast(`已保存「${elemKey}」为 ${side === "right" ? "右侧栏" : "左侧栏"}，排序 ${order}`, "ok");
+        await selectTarget(state.target.targetId);
+      } catch (err) {
+        toast(err.message, "err");
+      }
+    };
+  });
+}
+
+/** 渲染「＋ 添加可选字段」行（仅侧栏组件面板提供） */
+function sideAddFieldRow(elemKey) {
+  const opts = CFG_WIDGET_EXTRA_FIELDS.map(
+    (f) => `<option value="${esc(f.key)}">${esc(f.label)}</option>`,
+  ).join("");
+  return `<div class="add-field-row form-row">
+    <div class="row-head"><label>＋ 添加可选字段</label><span class="kpath">补充后即可在后台编辑</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <select class="addfield-key" data-addfield-key="${esc(elemKey)}" style="min-width:220px;">
+        ${opts}
+      </select>
+      <input class="addfield-val" data-addfield-val="${esc(elemKey)}" type="text" placeholder="值，如 right / 1 / 是">
+      <button type="button" class="btn btn-sm btn-info" data-addfield-add="${esc(elemKey)}">添加并保存</button>
+    </div>
+    <div class="addfield-hint" data-addfield-hint="${esc(elemKey)}" style="font-size:12px;color:#888;margin-top:4px;"></div>
+  </div>`;
+}
+
+/** 解析用户输入的可选字段值：真/假→布尔，纯数字→数字，其余字符串 */
+function parseExtraFieldValue(raw) {
+  const s = String(raw).trim();
+  if (s === "" ) return { t: "" };
+  if (s === "true" || s === "是" || s === "yes") return { t: true };
+  if (s === "false" || s === "否" || s === "no") return { t: false };
+  if (/^-?\d+(\.\d+)?$/.test(s)) return { t: Number(s) };
+  return { t: s };
+}
+
+/** 绑定侧栏组件「添加可选字段」交互 */
+function bindSideAddField(panel) {
+  panel.querySelectorAll("[data-addfield-key]").forEach((sel) => {
+    const elemKey = sel.dataset.addfieldKey;
+    const valInput = panel.querySelector(`[data-addfield-val="${CSS.escape(elemKey)}"]`);
+    const hint = panel.querySelector(`[data-addfield-hint="${CSS.escape(elemKey)}"]`);
+    const btn = panel.querySelector(`[data-addfield-add="${CSS.escape(elemKey)}"]`);
+    const fieldOf = (k) => CFG_WIDGET_EXTRA_FIELDS.find((f) => f.key === k);
+    const updateHint = () => {
+      const f = fieldOf(sel.value);
+      if (hint) hint.textContent = f ? f.hint : "";
+      if (valInput) valInput.placeholder = f ? String(f.def) : "值";
+    };
+    sel.addEventListener("change", updateHint);
+    updateHint();
+    if (btn) btn.onclick = async () => {
+      const f = fieldOf(sel.value);
+      if (!f) return;
+      const parsed = parseExtraFieldValue(valInput.value !== "" ? valInput.value : f.def);
+      if (parsed.t === "") { toast("请输入字段值", "err"); return; }
+      const keyPath = `${elemKey}.${sel.value}`;
+      try {
+        const data = await api(`/api/config/${state.target.targetId}`, {
+          method: "POST",
+          body: { changes: [{ keyPath, value: parsed.t }] },
+        });
+        toast(`已添加并保存「${sel.value}」字段`, "ok");
+        await selectTarget(state.target.targetId);
+      } catch (err) {
+        toast(err.message, "err");
+      }
+    };
+  });
+}
+
 function renderConfigPanel(read) {
   const { top, groups, rawHtml } = groupFields(read.fields);
   const panel = $("#config-panel");
@@ -1566,7 +1750,9 @@ function renderConfigPanel(read) {
 
   html += `<div class="form" id="config-form">`;
   for (const f of top) {
-    if (Array.isArray(f.value)) {
+    if (f.keyPath === "protectedRoutes") {
+      html += accessPageEditor(f);
+    } else if (Array.isArray(f.value)) {
       const allObj = f.value.length > 0 && f.value.every((v) => v && typeof v === "object");
       html += allObj ? configObjArrayEditor(f) : configArrayEditor(f);
     } else {
@@ -1579,7 +1765,9 @@ function renderConfigPanel(read) {
     if (!hasNested && !hasElems) continue;
     let inner = "";
     for (const f of g.nested) {
-      if (Array.isArray(f.value)) {
+      if (f.keyPath === "protectedRoutes") {
+        inner += accessPageEditor(f);
+      } else if (Array.isArray(f.value)) {
         const allObj = f.value.length > 0 && f.value.every((v) => v && typeof v === "object");
         inner += allObj ? configObjArrayEditor(f) : configArrayEditor(f);
       } else {
@@ -1590,9 +1778,11 @@ function renderConfigPanel(read) {
       const rows = info.entries
         .map((f) => configFieldRow(f, cfgLabelZh(f.keyPath.slice(f.keyPath.lastIndexOf("]") + 1))))
         .join("");
+      const quick = isSidebarComponentElem(elemKey) ? sideQuickControl(elemKey, info) : "";
+      const addField = isSidebarComponentElem(elemKey) ? sideAddFieldRow(elemKey) : "";
       inner += `<div class="panel panel-sub collapsed" data-elem-panel="${esc(elemKey)}">
         <div class="panel-head" data-toggle><span class="p-title">🧩 ${esc(elemLabelZh(elemKey, info.entries))}</span><span class="p-meta">${esc(elemKey)}</span><span class="p-arrow">▶</span></div>
-        <div class="panel-body">${rows}</div>
+        <div class="panel-body">${quick}${rows}${addField}</div>
       </div>`;
     }
     html += `<div class="panel collapsed">
@@ -1612,6 +1802,9 @@ function renderConfigPanel(read) {
   </div>`;
 
   panel.innerHTML = html;
+
+  // 访问口令页面勾选绑定
+  bindAccessPageEditor(panel);
 
   // 折叠面板
   panel.querySelectorAll("[data-toggle]").forEach((h) =>
@@ -1647,6 +1840,8 @@ function renderConfigPanel(read) {
   // 数组编辑器
   bindConfigArrayEditor(panel);
   bindConfigObjArray(panel);
+  bindSideAddField(panel);
+  bindSideQuick(panel);
 
   $("#btn-config-save-inline").onclick = saveTarget;
   refreshConfigSaveCount();
