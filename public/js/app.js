@@ -1306,7 +1306,7 @@ const CFG_WIDGET_ZH = {
   profile: "个人资料", announcement: "公告", categories: "分类", tags: "标签",
   sidebarToc: "侧边目录", advertisement: "广告", stats: "站点统计", calendar: "日历",
   music: "音乐播放器", siteInfo: "站点信息", umamiStats: "Umami 统计", changelog: "更新日志",
-  weather: "天气预报", relationship: "恋爱计时器",
+  weather: "天气预报", relationship: "恋爱计时器", recentUpdates: "最近更新",
 };
 
 /**
