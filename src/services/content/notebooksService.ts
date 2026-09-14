@@ -12,6 +12,7 @@ import { badRequest, notFound } from "../../utils/errors.js";
 import {
   backupDir,
   backupFile,
+  deleteBackup,
   listBackups,
   restoreDirBackup,
   restoreFileBackup,
@@ -347,6 +348,11 @@ export class NotebooksService {
   /** 全部备份（目录快照 + md 备份混排，按时间倒序） */
   backups(): BackupInfo[] {
     return listBackups(this.backupRoot);
+  }
+
+  /** 删除指定备份（目录快照 / 单篇笔记 md） */
+  deleteBackup(backupName: string): void {
+    deleteBackup(this.backupRoot, backupName);
   }
 
   /** 目录现有 md 换行风格（新笔记跟随） */

@@ -8,6 +8,7 @@ import { badRequest, notFound } from "../../utils/errors.js";
 import {
   backupDir,
   backupFile,
+  deleteBackup,
   listBackups,
   restoreDirBackup,
   restoreFileBackup,
@@ -43,6 +44,8 @@ export interface ContentService {
   delete(id: string): void;
   restore(backupName: string): void;
   backups(): BackupInfo[];
+  /** 删除指定备份（文件备份 / 目录快照） */
+  deleteBackup(backupName: string): void;
   /** 手动创建整模块备份（目录快照），返回备份名 */
   backupNow(): string;
 }
@@ -281,6 +284,11 @@ export class MultiFileContentService implements ContentService {
 
   backups(): BackupInfo[] {
     return listBackups(this.backupRoot);
+  }
+
+  /** 删除指定备份 */
+  deleteBackup(backupName: string): void {
+    deleteBackup(this.backupRoot, backupName);
   }
 
   /** 目录现有文件换行风格（新文件跟随） */
