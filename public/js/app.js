@@ -626,6 +626,7 @@ function renderContentForm(detail, isNew) {
     <div class="form-foot">
       <button type="submit" class="btn btn-primary">💾 保存</button>
       <button type="button" class="btn" data-cancel>返回列表</button>
+      ${!isNew && detail ? `<button type="button" class="btn btn-info" data-preview-current>🔗 预览</button>` : ""}
     </div>
   </form>`;
 }
@@ -773,6 +774,8 @@ async function openEdit(id) {
     const form = $("#content-form");
     bindArrayEditor(form);
     form.querySelector("[data-cancel]").onclick = renderModuleList;
+    const previewBtn = form.querySelector("[data-preview-current]");
+    if (previewBtn) previewBtn.onclick = () => window.open(previewUrl(id), "_blank");
     form.onsubmit = async (e) => {
       e.preventDefault();
       const { data, body } = collectFormData(form);
@@ -807,7 +810,7 @@ async function openBackups() {
     const list = await api(`/api/content/${state.module.id}/backups`);
     const body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
         <button class="btn btn-sm btn-info" id="backup-now">立即备份</button>
-        <span style="font-size:12.5px;color:#9a7a52;">新建不备份，更新/删除时自动备份，滚动保留 5 份</span>
+        <span style="font-size:12.5px;color:#9a7a52;">新建不备份，更新/删除时自动备份；同一文件最多保留 5 份</span>
       </div>${
         list.length
           ? `<div class="backup-list">${list
@@ -819,6 +822,7 @@ async function openBackups() {
           </div>
           <div class="bi-actions">
             <button class="btn btn-sm btn-info" data-restore="${esc(b.name)}">恢复</button>
+            <button class="btn btn-sm btn-danger" data-del-backup="${esc(b.name)}">删除</button>
           </div>
         </div>`,
               )
@@ -844,6 +848,19 @@ async function openBackups() {
             toast("恢复成功", "ok");
             closeModal();
             await renderModuleList();
+          } catch (err) {
+            toast(err.message, "err");
+          }
+        });
+      }),
+    );
+    $$("#modal-body [data-del-backup]").forEach((b) =>
+      (b.onclick = () => {
+        confirmModal("删除备份确认", `确定删除备份「${b.dataset.delBackup}」吗？<br>删除后不可恢复。`, async () => {
+          try {
+            await api(`/api/content/${state.module.id}/backups/${encodeURIComponent(b.dataset.delBackup)}`, { method: "DELETE" });
+            toast("备份已删除", "ok");
+            await openBackups();
           } catch (err) {
             toast(err.message, "err");
           }
@@ -1044,11 +1061,14 @@ async function openNoteForm(notebookId, noteId, isEdit = false) {
     <div class="form-foot">
       <button type="submit" class="btn btn-primary">💾 保存笔记</button>
       <button type="button" class="btn" data-back>返回笔记本</button>
+      ${isEdit ? `<button type="button" class="btn btn-info" data-preview-note>🔗 预览</button>` : ""}
     </div>
   </form>`;
   const form = $("#note-form");
   bindArrayEditor(form);
   form.querySelector("[data-back]").onclick = () => openNotebook(nb.id);
+  const previewNoteBtn = form.querySelector("[data-preview-note]");
+  if (previewNoteBtn) previewNoteBtn.onclick = () => window.open(previewUrl(noteId, notebookId), "_blank");
   form.onsubmit = async (e) => {
     e.preventDefault();
     const { data, body } = collectFormData(form);
