@@ -1,7 +1,7 @@
 /**
  * 备份与恢复工具（docs/后端新增Demo/00_公共通用规则.md 第 4 节）
  * - 统一归档：admin/backup/content/{模块名}/
- * - 新建不备份；更新 / 删除自动备份；最多保留最新 5 份
+ * - 新建不备份；更新 / 删除自动备份；单个文件最多保留最新 5 份
  * - 文件备份命名：原文件名_时间戳.bak.md；目录备份：目录名_时间戳.bak/
  * - 恢复：名称严格限定在备份目录内（防路径穿越），还原覆盖源路径
  */
@@ -34,17 +34,31 @@ export function backupFileName(original: string, isDir = false): string {
   return isDir ? `${base}_${timestamp()}.bak` : `${base}_${timestamp()}.bak.md`;
 }
 
-/** 滚动清理：目录内仅保留最新 N 份同名备份 */
+/** 备份名 → 原始文件名/目录名（去掉 _时间戳.bak(.ext) 后缀） */
+export function backupOrigin(name: string): string {
+  return name.replace(/_20\d{6}-\d{6}\.bak(\.\w+)?$/i, "");
+}
+
+/**
+ * 滚动清理：按「原始文件」分组，每组仅保留最新 N 份备份。
+ * 注意是「单个文件最多保留 N 份」，不同文件的备份互不影响。
+ */
 function prune(backupDir: string, keep = BACKUP_KEEP): void {
   if (!fs.existsSync(backupDir)) return;
-  const entries = fs
-    .readdirSync(backupDir, { withFileTypes: true })
-    .map((e) => ({ name: e.name, isDir: e.isDirectory(), time: fs.statSync(path.join(backupDir, e.name)).mtimeMs }))
-    .sort((a, b) => b.time - a.time);
-  for (const e of entries.slice(keep)) {
+  const groups = new Map<string, { full: string; isDir: boolean; time: number }[]>();
+  for (const e of fs.readdirSync(backupDir, { withFileTypes: true })) {
     const full = path.join(backupDir, e.name);
-    if (e.isDir) removeDir(full);
-    else removeFile(full);
+    const key = backupOrigin(e.name);
+    const list = groups.get(key) ?? [];
+    list.push({ full, isDir: e.isDirectory(), time: fs.statSync(full).mtimeMs });
+    groups.set(key, list);
+  }
+  for (const list of groups.values()) {
+    list.sort((a, b) => b.time - a.time);
+    for (const e of list.slice(keep)) {
+      if (e.isDir) removeDir(e.full);
+      else removeFile(e.full);
+    }
   }
 }
 
@@ -77,7 +91,7 @@ export function listBackups(backupDir: string): BackupInfo[] {
       return {
         name: e.name,
         type: e.isDirectory() ? "dir" : "file",
-        origin: e.name.replace(/_20\d{6}-\d{6}\.bak(\.\w+)?$/i, ""),
+        origin: backupOrigin(e.name),
         time: new Date(stat.mtimeMs).toISOString().replace("T", " ").slice(0, 19),
         size: e.isDirectory() ? dirSize(full) : stat.size,
         isDirSnapshot: e.isDirectory(),
@@ -118,4 +132,14 @@ export function restoreDirBackup(backupDir: string, name: string, destDir: strin
   }
   removeDir(destDir);
   copyDir(backup, destDir);
+}
+
+/** 删除指定备份（文件备份或目录快照） */
+export function deleteBackup(backupDir: string, name: string): void {
+  const target = resolveBackup(backupDir, name);
+  if (!fs.existsSync(target)) {
+    throw notFound("备份不存在");
+  }
+  if (fs.statSync(target).isDirectory()) removeDir(target);
+  else removeFile(target);
 }
