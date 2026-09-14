@@ -118,6 +118,23 @@ contentRouter.post("/:module/backups", (req, res, next) => {
   }
 });
 
+/** 删除指定备份 */
+contentRouter.delete("/:module/backups/:name", (req, res, next) => {
+  try {
+    const moduleId = req.params.module;
+    const backupName = String(req.params.name ?? "");
+    if (backupName === "") throw badRequest("备份名称不能为空");
+    if (isNotebooksModule(moduleId)) {
+      notebooksService.deleteBackup(backupName);
+    } else {
+      getContentService(moduleId).deleteBackup(backupName);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
 /** 恢复（notebooks：恢复整个笔记本目录快照） */
 contentRouter.post("/:module/restore", (req, res, next) => {
   try {
