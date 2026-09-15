@@ -3,6 +3,7 @@
  * 路径：src/content/plans/*.md；有正文；updated 日期校验，新建自动填充当天
  */
 import type { ContentModuleDef } from "../../../types/content.js";
+import { today } from "../../../utils/date.js";
 
 /** 规划条目 frontmatter 数据结构 */
 export interface PlanData {
@@ -11,12 +12,6 @@ export interface PlanData {
   cover?: string;
   description?: string;
   updated: string;
-}
-
-function today(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 export const plansModule: ContentModuleDef = {
