@@ -3,6 +3,7 @@
  * 路径：src/content/games/*.md；有正文；category 固定 game
  */
 import type { ContentModuleDef } from "../../../types/content.js";
+import { today } from "../../../utils/date.js";
 import { statusScoreSort } from "../statusSort.js";
 
 /** 游戏条目 frontmatter 数据结构 */
@@ -15,6 +16,8 @@ export interface GameData {
   status: number;
   comment?: string;
   tags?: string[];
+  /** 记录日期，用于「最近更新」排序 */
+  date?: string;
 }
 
 const STATUS = [
@@ -42,11 +45,16 @@ export const gamesModule: ContentModuleDef = {
     { key: "status", label: "游玩状态", type: "numberEnum", required: true, enum: STATUS },
     { key: "comment", label: "短评", type: "string", help: "一句话简介" },
     { key: "tags", label: "标签", type: "stringArray", help: "支持多标签新增、删除、修改" },
+    { key: "date", label: "记录日期", type: "date", help: "用于「最近更新」排序，新建时自动填充为当前日期" },
   ],
   // 与现有游戏文件一致：title/comment 无引号、image(URL) 双引号、tags flow 无引号
-  yamlFormat: { quote: "none", arrayStyle: "flow", arrayItemQuote: "none", overrides: { image: { quote: "double" } } },
-  normalize: (values) => {
+  yamlFormat: { quote: "none", arrayStyle: "flow", arrayItemQuote: "none", overrides: { image: { quote: "double" }, date: { quote: "double" } } },
+  normalize: (values, isNew) => {
     values.category = "game";
+    // 新建时自动补当天日期，避免条目因缺少日期而无法进入「最近更新」
+    if (isNew && (values.date === undefined || values.date === "")) {
+      values.date = today();
+    }
     return { remove: [] };
   },
 };

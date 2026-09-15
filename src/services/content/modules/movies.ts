@@ -3,6 +3,7 @@
  * 路径：src/content/movies/*.md；有正文；category 固定 real；subcategory 枚举
  */
 import type { ContentModuleDef } from "../../../types/content.js";
+import { today } from "../../../utils/date.js";
 import { statusScoreSort } from "../statusSort.js";
 
 /** 影视条目 frontmatter 数据结构 */
@@ -16,6 +17,8 @@ export interface MovieData {
   status: number;
   comment?: string;
   tags?: string[];
+  /** 记录日期，用于「最近更新」排序 */
+  date?: string;
 }
 
 const SUBCATEGORY = [
@@ -51,11 +54,16 @@ export const moviesModule: ContentModuleDef = {
     { key: "status", label: "观看状态", type: "numberEnum", required: true, enum: STATUS },
     { key: "comment", label: "短评", type: "string", help: "一句话简介" },
     { key: "tags", label: "标签", type: "stringArray", help: "支持多标签新增、删除、修改" },
+    { key: "date", label: "记录日期", type: "date", help: "用于「最近更新」排序，新建时自动填充为当前日期" },
   ],
   // 与现有影视文件一致：全部双引号、tags flow 双引号
   yamlFormat: { quote: "double", arrayStyle: "flow", arrayItemQuote: "double" },
-  normalize: (values) => {
+  normalize: (values, isNew) => {
     values.category = "real";
+    // 新建时自动补当天日期，避免条目因缺少日期而无法进入「最近更新」
+    if (isNew && (values.date === undefined || values.date === "")) {
+      values.date = today();
+    }
     return { remove: [] };
   },
 };
