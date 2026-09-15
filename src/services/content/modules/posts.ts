@@ -39,7 +39,7 @@ export const postsModule: ContentModuleDef = {
     { key: "order", label: "手动排序", type: "number", required: false, help: "大于 0 时优先于日期排序，值越大越靠前；不填则按日期从新到旧排" },
     { key: "description", label: "文章简介", type: "string" },
     { key: "tags", label: "标签", type: "stringArray" },
-    { key: "category", label: "文章分类", type: "string" },
+    { key: "category", label: "文章分类", type: "string", required: true },
     { key: "draft", label: "草稿", type: "boolean", defaultValue: false, help: "true 草稿不对外展示，仅后台可见" },
     { key: "image", label: "封面标识", type: "string", media: true, help: "留空提交自动填充为 api（随机封面）" },
     { key: "encrypted", label: "加密标记", type: "boolean", defaultValue: false },
