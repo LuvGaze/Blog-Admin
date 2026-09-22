@@ -1,5 +1,5 @@
 /**
- * 内容模块注册表：聚合全部 12 个内容模块，统一服务入口
+ * 内容模块注册表：聚合全部 14 个内容模块，统一服务入口
  * 单/多文件 md 模块 → MultiFileContentService；notebooks → NotebooksService
  */
 import type { ContentModuleDef } from "../../types/content.js";
@@ -14,6 +14,7 @@ import { friendsModule } from "./modules/friends.js";
 import { galleryModule } from "./modules/gallery.js";
 import { gamesModule } from "./modules/games.js";
 import { moviesModule } from "./modules/movies.js";
+import { momentsModule } from "./modules/moments.js";
 import { plansModule } from "./modules/plans.js";
 import { postsModule } from "./modules/posts.js";
 import { travelModule } from "./modules/travel.js";
@@ -43,6 +44,7 @@ export const contentModules: ContentModuleDef[] = [
   gamesModule,      /** 游戏 */
   moviesModule,     /** 影视 */
   friendsModule,    /** 友链 */
+  momentsModule,    /** 朋友圈 */
   plansModule,      /** 规划 */
   travelModule,     /** 旅行 */
   billsModule,      /** 账单 */

@@ -8,7 +8,7 @@ Blog 博客项目的独立后端管理工具：通过浏览器对博客内容（
 
 ## 功能特性
 
-- **内容管理**：13 个内容模块（文章 / 相册 / 笔记 / 书架 / 游戏 / 影视 / 友链 / 规划 / 旅行 / 账单 / 网站导航 / 更新日志 / 关于我）的可视化增删改查。
+- **内容管理**：14 个内容模块（文章 / 相册 / 笔记 / 书架 / 游戏 / 影视 / 友链 / 朋友圈 / 规划 / 旅行 / 账单 / 网站导航 / 更新日志 / 关于我）的可视化增删改查。
 - **表单化编辑**：按模块字段定义自动渲染表单，支持字符串、日期、数组、URL 媒体预览等控件；YAML 引号风格与换行风格**原样保留**写回。
 - **Markdown 正文**：带独立正文编辑器，frontmatter 与正文分离维护。
 - **一键预览**：列表与编辑页底部均可直接跳转博客对应页面查看效果。
@@ -85,7 +85,7 @@ admin/
 │   │   │   ├── registry.ts       # 模块注册与 service 获取（数组顺序 = 侧边栏顺序）
 │   │   │   ├── baseMultiFile.ts  # 通用 md / md+json 模块服务（列表/读取/新建/保存/删除/备份/恢复）
 │   │   │   ├── notebooksService.ts  # 笔记本专用（目录 + _index.json + 笔记 md）
-│   │   │   └── modules/          # 各模块字段定义（posts/gallery/books/games/movies/friends/plans/travel/bills/website/changelog/about）
+│   │   │   └── modules/          # 各模块字段定义（posts/gallery/books/games/movies/friends/moments/plans/travel/bills/website/changelog/about）
 │   │   ├── config/         # 配置目标注册（targets.ts：站点 / 侧边栏 / 评论 / 音乐 / 页脚 ...）
 │   │   ├── tsAstService.ts # TS 配置文件的 AST 编辑
 │   │   └── yamlService.ts  # YAML frontmatter 解析与归一化
@@ -101,7 +101,7 @@ admin/
 
 ## 内容模块
 
-后台「内容管理」支持以下 13 个模块（数据源均为博客 `src/content/` 下的真实文件）：
+后台「内容管理」支持以下 14 个模块（数据源均为博客 `src/content/` 下的真实文件）：
 
 | 模块 ID | 名称 | 目录 | 预览前缀 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -112,6 +112,7 @@ admin/
 | games | 游戏 | `games/` | `/games/` | 游戏条目（category=game） |
 | movies | 影视 | `movies/` | `/movies/` | 影视条目（category=real） |
 | friends | 友链 | `friends/` | `/friends` | 友情链接 |
+| moments | 朋友圈 | `moments/` | `/moments/` | 朋友圈说说（发布时间/置顶/图片/位置/标签，带正文） |
 | plans | 规划 | `plans/` | `/plans` | 日常规划条目 |
 | travel | 旅行 | `travel/` | `/travel/` | 到访地点（visitCount 正整数校验） |
 | bills | 账单 | `bills/` | `/bills/` | 账单流水（金额、日期、时间、标签等） |
@@ -134,7 +135,7 @@ admin/
 
 ## 配置管理
 
-后台「配置管理」通过 TS AST 结构化改写博客 `src/config/` 下的配置文件，覆盖站点、侧边栏布局、个人资料、导航栏、评论、音乐播放器、天气预报、页脚、代码块、动画特效、背景壁纸、公告、统计分析等目标，保留原有注释与格式。具体目标清单见 `src/services/config/targets.ts`。
+后台「配置管理」通过 TS AST 结构化改写博客 `src/config/` 下的配置文件，覆盖站点、侧边栏布局、个人资料、导航栏、导航菜单（**专用树形编辑器**：父菜单/子项增删、排序、改名、显隐、配图标、外链、关联页面开关）、评论、音乐播放器、天气预报、页脚、代码块、动画特效、背景壁纸、公告、统计分析等目标，保留原有注释与格式。具体目标清单见 `src/services/config/targets.ts`。
 
 ## API 概览
 
