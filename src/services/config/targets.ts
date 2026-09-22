@@ -74,6 +74,14 @@ export const configTargets: ConfigTargetDef[] = [
     group: "外观美化",
   },
   {
+    id: "navMenu",
+    name: "导航菜单",
+    file: "navMenuConfig.ts",
+    exportNames: ["navMenuConfig"],
+    saveNote: "控制顶部导航菜单名称、显隐及「文章/动态/关于」下拉子项；修改后需重新 build 生效",
+    group: "基础",
+  },
+  {
     id: "navbar",
     name: "导航栏配置",
     file: "navBarConfig.ts",
