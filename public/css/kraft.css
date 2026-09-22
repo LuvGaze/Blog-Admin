@@ -555,3 +555,34 @@ select { cursor: pointer; }
   .list-item { grid-template-columns: 1fr auto; }
   .list-item .li-file { display: none; }
 }
+
+/* ---- 导航菜单：专用树形编辑器（左=菜单树列表，右=编辑面板） ---- */
+.nav-split { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 14px; align-items: start; }
+@media (max-width: 860px) { .nav-split { grid-template-columns: 1fr; } }
+.nav-tree {
+  border: 3px dashed #c98a3d; border-radius: 14px; background: rgba(255,255,255,.55);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 3px;
+  max-height: 62vh; overflow: auto;
+}
+.nt-row {
+  display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 9px;
+  padding-left: calc(8px + var(--depth, 0) * 20px); cursor: pointer;
+  transition: background .15s;
+}
+.nt-row:hover { background: rgba(255,246,200,.85); }
+.nt-row.nt-sel { background: #cfe6f5; box-shadow: inset 3px 0 0 #3a6a9a; }
+.nt-arrow { border: 0; background: none; cursor: pointer; font-size: 12px; color: #8a6a35; width: 20px; flex-shrink: 0; padding: 0; line-height: 1; }
+.nt-arrow:hover { color: #c9812e; }
+.nt-arrow-empty { width: 20px; flex-shrink: 0; }
+.nt-name { font-size: 14px; color: #4a3a20; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-tag { font-size: 11px; border-radius: 6px; padding: 1px 6px; background: #f6ecd2; color: #8a6a35; flex-shrink: 0; }
+.nt-tag-hide { background: #fdd7e4; color: #8f2a20; }
+.nav-edit {
+  border: 3px dashed #4a7a3a; border-radius: 14px; background: rgba(255,255,255,.6);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 240px;
+}
+.nav-edit .nc-toggle { font-size: 13px; color: #6a5538; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; }
+.nav-edit .nc-toggle input { width: auto; }
+.nav-edit select.nn-pagekey { font-size: 13px; padding: 5px 8px; border: 2px dashed #d9b36a; border-radius: 8px; background: #fffdf4; width: 100%; }
+.nt-ops { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 10px; border-top: 2px dashed #d9b36a; }
+.nav-root-add { margin-top: 10px; align-self: flex-start; }
