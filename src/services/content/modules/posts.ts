@@ -52,7 +52,8 @@ export const postsModule: ContentModuleDef = {
     { key: "passwordHint", label: "密码提示", type: "string", help: "仅加密文章生效，公开文章不保留" },
   ],
   // 与现有文章文件一致：字符串无引号、日期无引号（published 为 z.date() 严格校验）、tags flow 无引号
-  yamlFormat: { quote: "none", arrayStyle: "flow", arrayItemQuote: "none" },
+  // password：用户输入的访问密码可能含特殊字符或形如纯数字，强制用双引号保证 YAML 解析为字符串
+  yamlFormat: { quote: "none", arrayStyle: "flow", arrayItemQuote: "none", overrides: { password: { quote: "double" } } },
   normalize: (values) => {
     // image 默认逻辑：留空自动填充 api
     if (values.image === undefined || values.image === null || String(values.image).trim() === "") {
