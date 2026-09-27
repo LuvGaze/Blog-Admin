@@ -1,6 +1,6 @@
 # Blog Admin · 博客管理后台
 
-> 项目专属博客 -> [Blog](https://github.com/LuvGaze/Blog)
+> 专属博客项目-> [Blog](https://github.com/LuvGaze/Blog)
 
 Blog 博客项目的独立后端管理工具：通过浏览器对博客内容（Markdown / YAML）与站点配置（TypeScript）进行可视化增删改查，内置自动备份、一键预览与配置项在线编辑。
 
