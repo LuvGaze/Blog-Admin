@@ -30,12 +30,12 @@ pnpm dev
 
 ### 环境变量（admin/.env）
 
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `PORT` | 后台服务端口 | `3344` |
-| `ADMIN_PASSWORD` | 管理密码（登录鉴权） | 无（必填） |
-| `ADMIN_SECRET` | Token 签名密钥，留空则每次启动随机生成 | 空 |
-| `BLOG_BASE_URL` | 博客站点地址（后台「预览」按钮跳转用） | `http://localhost:4321` |
+| 变量               | 说明                     | 默认值                     |
+|------------------|------------------------|-------------------------|
+| `PORT`           | 后台服务端口                 | `3344`                  |
+| `ADMIN_PASSWORD` | 管理密码（登录鉴权）             | 无（必填）                   |
+| `ADMIN_SECRET`   | Token 签名密钥，留空则每次启动随机生成 | 空                       |
+| `BLOG_BASE_URL`  | 博客站点地址（后台「预览」按钮跳转用）    | `http://localhost:4321` |
 
 > `ADMIN_PASSWORD` 未配置时优先读取项目根目录 `.env` 中的同名变量（兼容约定，只读不写）。
 
@@ -90,26 +90,28 @@ admin/
 
 后台「内容管理」支持以下模块（数据源均为博客 `src/content/` 下的真实文件）：
 
-| 模块 ID | 名称 | 目录 | 预览前缀 | 说明 |
-| --- | --- | --- | --- | --- |
-| `books` | 书架 | `books/` | `/books/` | 书籍条目（category=book） |
-| `games` | 游戏 | `games/` | `/games/` | 游戏条目（category=game） |
-| `movies` | 影视 | `movies/` | `/movies/` | 影视条目（category=real） |
-| `changelog` | 更新日志 | `changelog/` | `/changelog/` | 版本日志，列表按日期倒序 |
-| `website` | 网站导航 | `website/` | `/website/` | 常用网站导航 |
-| `friends` | 友链 | `friends/` | `/friends/` | 友情链接 |
-| `gallery` | 相册 | `gallery/` | `/gallery/` | 相册集 |
-| `plans` | 日常规划 | `plans/` | `/life/routines/` | 规划条目 |
-| `posts` | 文章 | `posts/` | `/posts/` | 博客文章 |
-| `travel` | 足迹 | `travel/` | `/travel/` | 到访地点（visitCount 正整数校验） |
-| `about` | 关于 | `spec/about.md` | `/about/` | 单文件正文 |
-| `notebooks` | 笔记本 | `notebooks/` | `/notebooks/` | 目录 + `_index.json` + 笔记（专用服务） |
+| 模块 ID       | 名称   | 目录              | 预览前缀              | 说明                            |
+|-------------|------|-----------------|-------------------|-------------------------------|
+| `books`     | 书架   | `books/`        | `/books/`         | 书籍条目（category=book）           |
+| `games`     | 游戏   | `games/`        | `/games/`         | 游戏条目（category=game）           |
+| `movies`    | 影视   | `movies/`       | `/movies/`        | 影视条目（category=real）           |
+| `changelog` | 更新日志 | `changelog/`    | `/changelog/`     | 版本日志，列表按日期倒序                  |
+| `website`   | 网站导航 | `website/`      | `/website/`       | 常用网站导航                        |
+| `friends`   | 友链   | `friends/`      | `/friends/`       | 友情链接                          |
+| `gallery`   | 相册   | `gallery/`      | `/gallery/`       | 相册集                           |
+| `plans`     | 日常规划 | `plans/`        | `/life/routines/` | 规划条目                          |
+| `posts`     | 文章   | `posts/`        | `/posts/`         | 博客文章                          |
+| `travel`    | 足迹   | `travel/`       | `/travel/`        | 到访地点（visitCount 正整数校验）        |
+| `about`     | 关于   | `spec/about.md` | `/about/`         | 单文件正文                         |
+| `notebooks` | 笔记本  | `notebooks/`    | `/notebooks/`     | 目录 + `_index.json` + 笔记（专用服务） |
 
-新增/修改模块：在 `src/services/content/modules/` 下创建模块定义文件，并在 `registry.ts` 中注册即可。侧边栏模块顺序 = `registry.ts` 中 `contentModules` 数组顺序，调整顺序只需移动数组元素。
+新增/修改模块：在 `src/services/content/modules/` 下创建模块定义文件，并在 `registry.ts` 中注册即可。侧边栏模块顺序 =
+`registry.ts` 中 `contentModules` 数组顺序，调整顺序只需移动数组元素。
 
 ## 配置管理
 
-后台「配置管理」读取 `src/config/` 下的 TypeScript 配置文件（每个配置对应用户界面上的一个「配置目标」），顶层对象与数组字段全部可视化编辑。当前支持的配置目标见 `services/config/targets.ts`，包括但不限于：
+后台「配置管理」读取 `src/config/` 下的 TypeScript 配置文件（每个配置对应用户界面上的一个「配置目标」），顶层对象与数组字段全部可视化编辑。当前支持的配置目标见
+`services/config/targets.ts`，包括但不限于：
 
 - **站点基础**：站点信息、导航栏、赞助、评论、License、底部、页脚
 - **页面布局**：侧边栏布局、音乐播放器、天气预报（新增）
@@ -120,24 +122,27 @@ admin/
 
 「侧边栏布局」配置目标中，每个 `leftComponents / rightComponents` 组件会展开为一个子面板，支持：
 
-- **请勿改动源码即可调整位置**：面板顶部「⚙ 组件位置」快捷控制，选择归属侧（左侧栏/右侧栏）并设置排序（数字越小越靠前），点击「保存位置」即时写入 `side` / `order` 字段。
-- **补充可选字段**：面板底部「＋ 添加可选字段」，可补充 `side`、`order`、`showTitle`、`position`、`showOnPostPage`、`hideOnNonPostPage` 等字段。
+- **请勿改动源码即可调整位置**：面板顶部「⚙ 组件位置」快捷控制，选择归属侧（左侧栏/右侧栏）并设置排序（数字越小越靠前），点击「保存位置」即时写入
+  `side` / `order` 字段。
+- **补充可选字段**：面板底部「＋ 添加可选字段」，可补充 `side`、`order`、`showTitle`、`position`、`showOnPostPage`、
+  `hideOnNonPostPage` 等字段。
 
-> 后台 TS AST 引擎支持为对象数组元素**新增缺失的标量属性**（如侧栏组件的 `side`/`order`），因此「新字段没有被源码初始化」不再是无法编辑的阻碍——直接在后台就能补上。
+> 后台 TS AST 引擎支持为对象数组元素**新增缺失的标量属性**（如侧栏组件的 `side`/`order`
+> ），因此「新字段没有被源码初始化」不再是无法编辑的阻碍——直接在后台就能补上。
 
 ## API 概览
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `POST` | `/api/auth/login` | 登录，返回 Bearer Token |
-| `GET` | `/api/health` | 健康检查（含博客地址信息） |
-| `GET` | `/api/modules` | 内容模块清单 |
-| `GET / POST` | `/api/content/:module` | 列表 / 新建条目 |
-| `GET / PUT / DELETE` | `/api/content/:module/:id` | 读取 / 保存 / 删除条目 |
-| `GET / POST` | `/api/content/:module/backups` | 备份列表 / 手动创建整模块备份 |
-| `POST` | `/api/content/:module/restore` | 恢复备份（文件备份 / 目录快照） |
-| `GET` | `/api/config` | 配置目标清单 |
-| `GET / POST` | `/api/config/:id` | 读取 / 保存配置（body `{ changes: [{ keyPath, value }] }`） |
+| 方法                   | 路径                             | 说明                                                  |
+|----------------------|--------------------------------|-----------------------------------------------------|
+| `POST`               | `/api/auth/login`              | 登录，返回 Bearer Token                                  |
+| `GET`                | `/api/health`                  | 健康检查（含博客地址信息）                                       |
+| `GET`                | `/api/modules`                 | 内容模块清单                                              |
+| `GET / POST`         | `/api/content/:module`         | 列表 / 新建条目                                           |
+| `GET / PUT / DELETE` | `/api/content/:module/:id`     | 读取 / 保存 / 删除条目                                      |
+| `GET / POST`         | `/api/content/:module/backups` | 备份列表 / 手动创建整模块备份                                    |
+| `POST`               | `/api/content/:module/restore` | 恢复备份（文件备份 / 目录快照）                                   |
+| `GET`                | `/api/config`                  | 配置目标清单                                              |
+| `GET / POST`         | `/api/config/:id`              | 读取 / 保存配置（body `{ changes: [{ keyPath, value }] }`） |
 
 所有写操作与读取敏感接口均需请求头 `Authorization: Bearer <token>`。
 
@@ -148,7 +153,8 @@ admin/
 - **自动备份**：更新 / 删除条目时自动备份（新建不备份），默认保留最新 5 份。
 - **手动备份**：后台「备份与恢复」弹窗顶部点击「立即备份」，或调用 `POST /api/content/:module/backups`，为整个模块创建目录快照。
 - **备份类型**：文件备份 `原文件名_时间戳.bak.md`；目录快照 `目录名_时间戳.bak/`（整个模块 / 整个笔记本目录）。列表按时间倒序展示，并标记类型。
-- **恢复**：后台点击「恢复」按钮，或调用 `POST /api/content/:module/restore`（body `{ backupName }`），覆盖还原同名源文件 / 整个源目录。恢复前请确认，操作会覆盖当前内容。
+- **恢复**：后台点击「恢复」按钮，或调用 `POST /api/content/:module/restore`（body `{ backupName }`），覆盖还原同名源文件 /
+  整个源目录。恢复前请确认，操作会覆盖当前内容。
 - **notebooks 特殊处理**：备份列表同时包含笔记本目录快照与单篇笔记文件备份；单篇笔记在笔记详情页通过「恢复笔记」还原到对应笔记本。
 - 备份归档存放于 `admin/backup/content/{模块ID}/`，可手动清理。
 
