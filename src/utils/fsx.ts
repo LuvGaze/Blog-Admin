@@ -96,3 +96,21 @@ export function listFiles(dir: string, ext?: string): string[] {
     .map((e) => e.name)
     .sort();
 }
+
+/** 递归列出目录内文件（可过滤扩展名），返回相对路径（统一使用 /） */
+export function listFilesRecursive(dir: string, ext?: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  const result: string[] = [];
+  const walk = (base: string, prefix: string) => {
+    for (const entry of fs.readdirSync(base, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walk(path.join(base, entry.name), rel);
+      } else if (entry.isFile() && (ext === undefined || entry.name.endsWith(ext))) {
+        result.push(rel);
+      }
+    }
+  };
+  walk(dir, "");
+  return result.sort();
+}

@@ -16,7 +16,16 @@ export const contentRouter = Router();
 export function modulesListHandler(_req: Request, res: Response): void {
   const modules = listContentModules().map((m) => {
     if (m.isNotebooks) {
-      return { ...m, fields: notebookFieldDef, noteFields: noteFieldDef };
+      return {
+        ...m,
+        fields: notebookFieldDef,
+        noteFields: noteFieldDef,
+        hasBody: true,
+        isSingleFile: false,
+        noFrontmatter: false,
+        titleField: "name",
+        groupMeta: null,
+      };
     }
     const svc = getContentService(m.id);
     return {
@@ -24,17 +33,29 @@ export function modulesListHandler(_req: Request, res: Response): void {
       name: m.name,
       isNotebooks: false,
       urlPrefix: m.urlPrefix,
+      grouped: m.grouped,
       hasBody: svc.meta.hasBody,
       isSingleFile: svc.meta.isSingleFile,
       noFrontmatter: svc.meta.noFrontmatter === true,
       titleField: svc.meta.titleField,
       fields: svc.meta.fields,
+      groupMeta: svc.meta.groupMeta ?? null,
     };
   });
   res.json({ modules });
 }
 
 // ─────────────── notebooks 多层模块：笔记子路由（优先注册） ───────────────
+
+/** 恢复单篇笔记（备份所属笔记本与目标笔记本可不同，按备份原名覆盖） */
+contentRouter.post("/notebooks/:notebookId/restore-note", (req, res, next) => {
+  try {
+    notebooksService.restoreNote(req.params.notebookId, String(req.body?.backupName ?? ""));
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
 
 /** 新建笔记 */
 contentRouter.post("/notebooks/:notebookId/notes", (req, res, next) => {
@@ -79,6 +100,55 @@ contentRouter.delete("/notebooks/:notebookId/notes/:noteId", (req, res, next) =>
 contentRouter.post("/notebooks/:notebookId/notes/:noteId/restore", (req, res, next) => {
   try {
     notebooksService.restoreNote(req.params.notebookId, String(req.body?.backupName ?? ""));
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ─────────────── 分组元数据（友链 / 网站导航）：需先于 /:module/:id 注册 ───────────────
+
+/** 分组列表 */
+contentRouter.get("/:module/groups", (req, res, next) => {
+  try {
+    const moduleId = req.params.module;
+    if (isNotebooksModule(moduleId)) throw badRequest("notebook 使用目录本身作为分组");
+    res.json(getContentService(moduleId).listGroups());
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 新建分组 */
+contentRouter.post("/:module/groups", (req, res, next) => {
+  try {
+    const moduleId = req.params.module;
+    if (isNotebooksModule(moduleId)) throw badRequest("notebook 使用目录本身作为分组");
+    const r = getContentService(moduleId).createGroup({ data: req.body?.data ?? {} });
+    res.status(201).json(r);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 更新分组元数据 */
+contentRouter.put("/:module/groups/:groupId", (req, res, next) => {
+  try {
+    const moduleId = req.params.module;
+    if (isNotebooksModule(moduleId)) throw badRequest("notebook 使用目录本身作为分组");
+    getContentService(moduleId).updateGroup(req.params.groupId, { data: req.body?.data ?? {} });
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 删除空分组 */
+contentRouter.delete("/:module/groups/:groupId", (req, res, next) => {
+  try {
+    const moduleId = req.params.module;
+    if (isNotebooksModule(moduleId)) throw badRequest("notebook 使用目录本身作为分组");
+    getContentService(moduleId).deleteGroup(req.params.groupId);
     res.json({ ok: true });
   } catch (e) {
     next(e);
@@ -176,7 +246,7 @@ contentRouter.post("/:module", (req, res, next) => {
       return;
     }
     const svc = getContentService(moduleId);
-    const r = svc.create({ data: req.body?.data, body: req.body?.body });
+    const r = svc.create({ data: req.body?.data, body: req.body?.body, group: req.body?.group });
     res.status(201).json(r);
   } catch (e) {
     next(e);
@@ -204,7 +274,7 @@ contentRouter.put("/:module/:id", (req, res, next) => {
     if (isNotebooksModule(moduleId)) {
       notebooksService.updateNotebook(req.params.id, { data: req.body?.data });
     } else {
-      getContentService(moduleId).update(req.params.id, { data: req.body?.data, body: req.body?.body });
+      getContentService(moduleId).update(req.params.id, { data: req.body?.data, body: req.body?.body, group: req.body?.group });
     }
     res.json({ ok: true });
   } catch (e) {

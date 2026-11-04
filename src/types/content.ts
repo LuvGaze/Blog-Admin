@@ -4,10 +4,12 @@
  */
 export type FieldType =
   | "string"
+  | "textarea"
   | "number"
   | "positiveInt"
   | "boolean"
   | "date"
+  | "datetime"
   | "time"
   | "url"
   | "stringArray"
@@ -66,6 +68,19 @@ export interface YamlFormat {
   overrides?: Record<string, YamlFieldFormat>;
 }
 
+/** 分组元数据文件（如友链/网站导航的 _index.json） */
+export interface GroupMetaDef {
+  /** 元数据文件名，默认 _index.json */
+  fileName?: string;
+  /** 分组元数据可编辑字段 */
+  fields: FieldDef[];
+  /** 分组显示标题字段 */
+  titleField: string;
+  /** 分组排序字段与方向 */
+  sortField: string;
+  sortOrder: "asc" | "desc";
+}
+
 /** 内容模块元数据 */
 export interface ContentModuleDef {
   /** 模块标识：books / games / ... */
@@ -90,6 +105,12 @@ export interface ContentModuleDef {
   sortOrder?: "asc" | "desc";
   /** 列表排序字段（frontmatter key，依次作为主/次排序键），缺省按文件名 */
   sortKeys?: string[];
+  /** order 字段的排序方向（缺省 desc：越大越靠前） */
+  orderDirection?: "asc" | "desc";
+  /** 分组模式下，同一分组内条目的比较函数（缺省按 order + sortKeys） */
+  compareItems?: (a: ContentListItem, b: ContentListItem) => number;
+  /** 文件夹分组模式（友链、网站导航）：条目可位于一级分类目录中 */
+  groupMeta?: GroupMetaDef;
   /**
    * 自定义列表排序钩子（优先于 sortOrder/sortKeys）。
    * 用于状态顺序（在读>读过>想读>搁置>抛弃）等无法用简单字段排序表达的规则。
@@ -114,6 +135,8 @@ export interface ContentListItem {
   id: string;
   filename: string;
   title: string;
+  /** 所属分组（文件夹分组模式下的分类目录名，根目录为空字符串） */
+  group?: string;
   /** 解析出的全部字段值 */
   fields: Record<string, unknown>;
   /** 文件解析异常时非空（非法文件标记，不加载表单） */
@@ -124,10 +147,23 @@ export interface ContentListItem {
 export interface ContentDetail {
   id: string;
   filename: string;
+  group?: string;
   fields: Record<string, unknown>;
   body: string;
   hasFrontmatter: boolean;
   /** 未知字段（嵌套对象等，只读展示） */
   unknownKeys: string[];
   error?: string;
+}
+
+/** 分组信息 */
+export interface ContentGroup {
+  /** 分组目录名（URL 参数使用） */
+  id: string;
+  /** 显示标题 */
+  name: string;
+  /** _index.json 中的全部字段 */
+  fields: Record<string, unknown>;
+  /** 分组内条目数量 */
+  itemCount: number;
 }

@@ -1,8 +1,8 @@
 /* ============================================================
    博客管理后台前端（admin/public）
    - 登录鉴权：POST /api/auth/login → Bearer token（localStorage）
-   - 内容管理：12 个内容模块，FieldDef 动态渲染表单（YAML 引号保留写回由后端保证）
-   - 配置管理：17 个配置 target，TS-AST 字段按 keyPath 折叠渲染、数组增删拖拽、媒体预览
+   - 内容管理：15 个内容模块（含文件夹分组与笔记本），FieldDef 动态渲染表单（YAML 引号保留写回由后端保证）
+   - 配置管理：25 个配置 target，TS-AST 字段按 keyPath 折叠渲染、数组增删拖拽、媒体预览
    - 备份恢复：模块级备份列表 + 恢复
    ============================================================ */
 "use strict";
@@ -14,6 +14,7 @@ const state = {
     module: null,           // 当前内容模块元数据
     nb: null,               // 当前笔记本（详情视图）
     note: null,             // 当前正在编辑的笔记
+    groupCache: [],         // 当前模块的分组列表（分组模块用）
     targets: [],            // GET /api/config
     target: null,           // 当前配置 target 读取结果
     changes: new Map(),     // keyPath -> {value, hasQuote}
@@ -35,6 +36,9 @@ const esc = (s) =>
         '"': "&quot;",
         "'": "&#39;"
     }[c]));
+
+/** 条目 id 编码：分组目录/文件名中的 / 编码为 %2F，保证作为单段路由参数传递 */
+const encId = (id) => encodeURIComponent(String(id ?? ""));
 
 function fmtSize(n) {
     if (n < 1024) return `${n} B`;
@@ -174,13 +178,23 @@ async function renderModuleList() {
     const m = state.module;
     setPanelTitle(`${m.name} · 列表`);
     setPanelButtons(!m.isSingleFile, true);
-    $("#btn-create").onclick = openCreate;
+    $("#btn-create").onclick = () => openCreate();
     $("#btn-backups").onclick = openBackups;
-    const data = await api(`/api/content/${m.id}`);
+    const [data, groups] = await Promise.all([
+        api(`/api/content/${m.id}`),
+        m.grouped ? api(`/api/content/${m.id}/groups`) : Promise.resolve([]),
+    ]);
+    state.groupCache = groups;
     const panel = $("#content-panel");
     if (m.isNotebooks) {
         panel.innerHTML = renderNotebooks(data);
         bindNotebookCards(panel);
+        return;
+    }
+    if (m.grouped) {
+        panel.innerHTML = renderGroupedSections(m, data, groups);
+        bindGroupSections(panel);
+        bindCardGrid(panel);
         return;
     }
     if (!data.length) {
@@ -189,6 +203,146 @@ async function renderModuleList() {
     }
     panel.innerHTML = renderModuleCards(m, data);
     bindCardGrid(panel);
+}
+
+/* ─────────── 内容管理：文件夹分组（友链 / 网站导航） ─────────── */
+
+/** 分组区块：标题 + 元数据 + 条目卡片 */
+function groupSectionHtml(m, groupId, title, items, meta) {
+    const actions =
+        groupId === ""
+            ? ""
+            : `<button class="btn btn-sm mini" data-gcreate="${esc(groupId)}">＋ 新建条目</button>
+      <button class="btn btn-sm mini" data-gedit="${esc(groupId)}">编辑分组</button>
+      ${meta ? `<button class="btn btn-sm btn-danger mini" data-gdel="${esc(groupId)}">删除分组</button>` : ""}`;
+    const desc = meta?.fields?.description
+        ? `<div class="pc-desc" style="margin:2px 0 0;">${esc(meta.fields.description)}</div>`
+        : "";
+    const cards = items.length
+        ? renderModuleCards(m, items)
+        : `<div class="empty-hint">该分组下暂无内容</div>`;
+    return `<div class="panel-head-row" style="margin-top:16px;align-items:flex-start;">
+      <div>
+        <h3 class="panel-title" style="font-size:17px;">📁 ${esc(title)}<span class="p-meta">${items.length} 项</span></h3>
+        ${desc}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">${actions}</div>
+    </div>
+    ${cards}`;
+}
+
+/** 分组模块列表：按后台分组顺序渲染，根目录条目归入「未分组」 */
+function renderGroupedSections(m, data, groups) {
+    const byGroup = new Map();
+    for (const it of data) {
+        const g = it.group ?? "";
+        if (!byGroup.has(g)) byGroup.set(g, []);
+        byGroup.get(g).push(it);
+    }
+    const known = new Set(groups.map((g) => g.id));
+    const orphans = [...byGroup.keys()].filter((g) => g !== "" && !known.has(g));
+    let html = `<div class="panel-head-row">
+    <h3 class="panel-title" style="font-size:18px;">分组（${groups.length} 个）</h3>
+    <button class="btn btn-sm btn-info" data-gnew>＋ 新建分组</button>
+  </div>`;
+    if (!groups.length && !data.length) {
+        html += `<div class="empty-hint">还没有分组 ~ 点击右上角「＋ 新建分组」创建第一个分类</div>`;
+    }
+    for (const g of groups) {
+        html += groupSectionHtml(m, g.id, g.name || g.id, byGroup.get(g.id) || [], g);
+    }
+    for (const gid of orphans) html += groupSectionHtml(m, gid, gid, byGroup.get(gid) || [], null);
+    if (byGroup.has("")) html += groupSectionHtml(m, "", "未分组", byGroup.get("") || [], null);
+    return html;
+}
+
+/** 分组的字段表单（新建 / 编辑共用） */
+function groupFormRows(fields, values) {
+    return fields
+        .map((f) => {
+            const v = values ? values[f.key] : undefined;
+            const initial = v === undefined && f.defaultValue !== undefined ? f.defaultValue : v;
+            const req = f.required ? `<span class="req">*</span>` : "";
+            const help = f.help ? `<span class="help">${esc(f.help)}</span>` : "";
+            return `<div class="form-row"><div class="row-head"><label>${esc(f.label)}${req}</label>${help}</div>
+        ${fieldControlHtml(f, initial)}</div>`;
+        })
+        .join("");
+}
+
+/** 收集弹窗内的字段（分组表单专用） */
+function collectModalFields(root) {
+    const data = {};
+    root.querySelectorAll("[data-fkey]").forEach((el) => {
+        if (el.type === "checkbox") data[el.dataset.fkey] = el.checked;
+        else if (el.type === "number") data[el.dataset.fkey] = el.value === "" ? null : Number(el.value);
+        else data[el.dataset.fkey] = el.value;
+    });
+    return data;
+}
+
+/** 新建 / 编辑分组（group=null 表示新建） */
+async function openGroupForm(group) {
+    const m = state.module;
+    const def = m.groupMeta;
+    if (!def) return;
+    const isNew = !group;
+    const values = isNew ? {} : group.fields || {};
+    openModal(
+        isNew ? `新建分组 · ${m.name}` : `编辑分组 · ${group.name || group.id}`,
+        `<form id="group-form" class="form">${groupFormRows(def.fields, values)}</form>`,
+        `<button class="btn btn-sm" data-close>取消</button>
+     <button class="btn btn-sm btn-primary" data-save>💾 保存</button>`,
+    );
+    $("#modal-foot [data-close]").onclick = closeModal;
+    $("#modal-foot [data-save]").onclick = async () => {
+        const form = $("#group-form");
+        const data = collectModalFields(form);
+        try {
+            if (isNew) {
+                await api(`/api/content/${m.id}/groups`, {method: "POST", body: {data}});
+                toast("分组已创建", "ok");
+            } else {
+                await api(`/api/content/${m.id}/groups/${encId(group.id)}`, {method: "PUT", body: {data}});
+                toast("分组已保存", "ok");
+            }
+            closeModal();
+            await renderModuleList();
+        } catch (err) {
+            toast(err.message, "err");
+        }
+    };
+}
+
+function deleteGroup(group) {
+    confirmModal(
+        "删除分组确认",
+        `确定删除分组「${esc(group.name || group.id)}」吗？<br>仅可删除空分组，分组元数据会先备份。`,
+        async () => {
+            try {
+                await api(`/api/content/${state.module.id}/groups/${encId(group.id)}`, {method: "DELETE"});
+                toast("分组已删除", "ok");
+                await renderModuleList();
+            } catch (err) {
+                toast(err.message, "err");
+            }
+        },
+    );
+}
+
+/** 绑定分组区块的操作按钮（需在拉取分组后调用） */
+function bindGroupSections(panel) {
+    const groups = state.groupCache || [];
+    panel.querySelectorAll("[data-gnew]").forEach((b) => (b.onclick = () => openGroupForm(null)));
+    panel.querySelectorAll("[data-gcreate]").forEach((b) => (b.onclick = () => openCreate(b.dataset.gcreate)));
+    panel.querySelectorAll("[data-gedit]").forEach((b) => {
+        const g = groups.find((x) => x.id === b.dataset.gedit);
+        b.onclick = () => (g ? openGroupForm(g) : toast("分组不存在，请刷新", "err"));
+    });
+    panel.querySelectorAll("[data-gdel]").forEach((b) => {
+        const g = groups.find((x) => x.id === b.dataset.gdel);
+        b.onclick = () => (g ? deleteGroup(g) : toast("分组不存在，请刷新", "err"));
+    });
 }
 
 /* ─────────── 内容管理：模块专属卡片陈列 ─────────── */
@@ -211,10 +365,9 @@ const CARD_STATUS_TEXT = {
 /** 更新日志类型文本 */
 const CHANGELOG_TYPE_TEXT = {
     feature: "新增功能",
+    improvement: "优化改进",
     fix: "问题修复",
-    optimize: "性能优化",
-    docs: "文档更新",
-    refactor: "代码重构",
+    removal: "功能移除",
 };
 
 /** 影视子分类文本 */
@@ -241,12 +394,13 @@ function coverHtml(m, it, cls) {
     return `<div class="cover ${cls}"><img src="${esc(src)}" alt="" loading="lazy" onerror="this.remove()"></div>`;
 }
 
-/** 卡片通用操作按钮 */
+/** 卡片通用操作按钮（单文件模块不提供删除） */
 function cardActions(it) {
+    const canDelete = !(state.module && state.module.isSingleFile);
     return `<div class="card-actions">
     <button class="btn btn-sm mini" data-preview="${esc(it.id)}">预览</button>
     <button class="btn btn-sm btn-info" data-edit="${esc(it.id)}">编辑</button>
-    <button class="btn btn-sm btn-danger" data-del="${esc(it.id)}">删除</button>
+    ${canDelete ? `<button class="btn btn-sm btn-danger" data-del="${esc(it.id)}">删除</button>` : ""}
   </div>`;
 }
 
@@ -279,29 +433,14 @@ function renderModuleCards(m, data) {
     }
 }
 
-/** 文章：横版信纸卡片，置顶/加密/草稿徽章；排序 草稿 > 置顶 > 其他，同类按发布日期倒序 */
-function postPriority(it) {
-    const f = it.fields || {};
-    if (f.draft) return 0;
-    if (f.pinned) return 1;
-    return 2;
-}
-
+/** 文章：横版信纸卡片，置顶/加密/草稿徽章（顺序由后台统一排序） */
 function renderPostCards(data) {
-    const ordered = data
-        .slice()
-        .sort((a, b) => {
-            const p = postPriority(a) - postPriority(b);
-            if (p !== 0) return p;
-            return String(b.fields?.published || "").localeCompare(String(a.fields?.published || ""));
-        });
-    return `<div class="mod-grid post-grid">${ordered
+    return `<div class="mod-grid post-grid">${data
         .map((it) => {
             const f = it.fields || {};
             const badges = [];
             if (f.pinned) badges.push(`<span class="tag tag-pin">📌 置顶</span>`);
-            // 加密文章可能在 frontmatter 中只写 password（未写 encrypted: true），两者都判断
-            if (f.encrypted || (f.password && String(f.password).trim() !== "")) badges.push(`<span class="tag tag-lock">🔒 加密</span>`);
+            if (f.password && String(f.password).trim() !== "") badges.push(`<span class="tag tag-lock">🔒 加密</span>`);
             if (f.draft) badges.push(`<span class="tag tag-draft">🕸 草稿</span>`);
             const meta = [f.published ? `📅 ${esc(String(f.published))}` : ""].filter(Boolean);
             return `<div class="post-card" data-open="${esc(it.id)}">
@@ -394,17 +533,15 @@ function renderMovieCards(data) {
         .join("")}</div>`;
 }
 
-/** 友链：名片风格，圆形头像；按权重降序（越大越靠前） */
+/** 友链：名片风格，圆形头像（排序由后台按权重/名称统一处理） */
 function renderFriendCards(data) {
-    const ordered = data.slice().sort((a, b) => (b.fields?.weight ?? 0) - (a.fields?.weight ?? 0));
-    return `<div class="mod-grid friend-grid">${ordered
+    return `<div class="mod-grid friend-grid">${data
         .map((it) => {
             const f = it.fields || {};
             const enabled = f.enabled !== false;
+            const avatar = itemCover({id: "friends"}, it);
             return `<div class="friend-card" data-open="${esc(it.id)}">
-        <div class="fc-avatar">${itemCover({id: "friends"}, it)
-                ? `<img src="${esc(itemCover({id: "friends"}, it))}" alt="" loading="lazy" onerror="this.remove()">`
-                : ""}</div>
+        <div class="fc-avatar">${avatar ? `<img src="${esc(avatar)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>
         <div class="fc-name">${esc(it.title)}${it.error ? `<span class="badge">⚠</span>` : ""}</div>
         <div class="fc-desc">${f.desc ? esc(f.desc) : "（暂无简介）"}</div>
         <div class="fc-meta">${enabled ? '<span class="card-badge ok">✅ 启用</span>' : '<span class="card-badge off">⏸ 停用</span>'}${f.weight !== undefined ? ` · 权重 ${esc(f.weight)}` : ""}</div>
@@ -456,7 +593,7 @@ function renderWebsiteCards(data) {
             const iconUrl = /^https?:\/\//i.test(iconRaw) ? iconRaw : "";
             const iconTxt = iconUrl ? "" : (iconRaw && !iconRaw.includes(":") && iconRaw.length <= 4 ? iconRaw : (it.title ? it.title[0] : "🔗"));
             return `<div class="site-card" data-open="${esc(it.id)}">
-        <div class="wc-top"><div class="wc-icon">${iconUrl ? `<img src="${esc(iconUrl)}" alt="" loading="lazy" onerror="this.remove()">` : esc(iconTxt)}</div>${f.category ? `<span class="tag tag-cat">${esc(f.category)}</span>` : ""}</div>
+        <div class="wc-top"><div class="wc-icon">${iconUrl ? `<img src="${esc(iconUrl)}" alt="" loading="lazy" onerror="this.remove()">` : esc(iconTxt)}</div>${f.featured ? `<span class="tag tag-pin">★ 推荐</span>` : ""}</div>
         <div class="wc-name">${esc(it.title)}${it.error ? `<span class="badge">⚠</span>` : ""}</div>
         ${f.description ? `<div class="wc-desc">${esc(f.description)}</div>` : ""}
         <div class="wc-meta">${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(f.url.replace(/^https?:\/\//, ""))}</a>` : ""}${f.order !== undefined ? ` · 排序 ${esc(f.order)}` : ""}</div>
@@ -497,6 +634,7 @@ function renderAboutCard(data) {
 
 /** 回退：通用文字列表 */
 function renderFallbackList(data) {
+    const canDelete = !(state.module && state.module.isSingleFile);
     return `<div class="list-card">
     <div class="list-head"><span>标题</span><span>文件名</span><span>操作</span></div>
     ${data
@@ -509,7 +647,7 @@ function renderFallbackList(data) {
         <div class="li-actions">
           <button class="btn btn-sm mini" data-preview="${esc(it.id)}">预览</button>
           <button class="btn btn-sm btn-info" data-edit="${esc(it.id)}">编辑</button>
-          <button class="btn btn-sm btn-danger" data-del="${esc(it.id)}">删除</button>
+          ${canDelete ? `<button class="btn btn-sm btn-danger" data-del="${esc(it.id)}">删除</button>` : ""}
         </div>
       </div>`,
         )
@@ -540,14 +678,21 @@ function bindCardGrid(panel) {
 }
 
 /* ─────────── 内容管理：表单 ─────────── */
-/** 博客预览 URL：单页型模块直接打开聚合页；目录型拼接条目 slug（统一以 / 结尾）；笔记带笔记本 ID */
+/** 聚合页模块：条目没有独立页面，预览直接打开栏目首页 */
+const AGGREGATE_MODULES = new Set(["moments", "plans", "friends", "website", "about", "specFriends", "guestbook"]);
+
+/** 博客预览 URL：聚合页模块直接打开栏目页；目录型拼接条目 slug（统一以 / 结尾）；笔记带笔记本 ID */
 function previewUrl(itemId, nbId) {
     const base = state.blogBase || "http://localhost:4321";
     if (nbId) {
         const noteSlug = encodeURIComponent(String(itemId).replace(/\.md$/i, ""));
         return `${base}/notebooks/${encodeURIComponent(nbId)}/${noteSlug}/`;
     }
-    const prefix = state.module?.urlPrefix || "/";
+    const m = state.module;
+    const prefix = m?.urlPrefix || "/";
+    if (m && (m.isSingleFile || AGGREGATE_MODULES.has(m.id))) {
+        return `${base}${prefix}`;
+    }
     const itemSlug = encodeURIComponent(String(itemId).replace(/\.(md|mdx)$/i, ""));
     if (prefix.endsWith("/")) {
         return `${base}${prefix}${itemSlug}/`;
@@ -563,6 +708,13 @@ function todayStr() {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** 当前时间（YYYY-MM-DD HH:mm:ss），作为 datetime 字段新建默认值 */
+function nowDateTimeStr() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    return `${todayStr()} ${p(d.getHours())}:${p(d.getMinutes())}:00`;
+}
+
 function fieldControlHtml(field, value, opts = {}) {
     const v = value === undefined || value === null ? "" : value;
     if (field.enum && field.enum.length) {
@@ -575,13 +727,24 @@ function fieldControlHtml(field, value, opts = {}) {
         case "number":
             return `<input type="number" step="any" data-fkey="${esc(field.key)}" value="${esc(v)}">`;
         case "positiveInt":
-            return `<input type="number" min="0" step="1" data-fkey="${esc(field.key)}" value="${esc(v)}">`;
+            return `<input type="number" min="1" step="1" data-fkey="${esc(field.key)}" value="${esc(v)}">`;
         case "boolean":
             return `<label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" data-fkey="${esc(field.key)}" ${v === true ? "checked" : ""}> ${v === true ? "是" : "否"}</label>`;
         case "date":
             return `<input type="date" data-fkey="${esc(field.key)}" value="${esc(v)}">`;
         case "time":
             return `<input type="time" data-fkey="${esc(field.key)}" value="${esc(v)}">`;
+        case "datetime":
+            // 存储格式为「YYYY-MM-DD HH:mm:ss」，datetime-local 需要 T 分隔且支持秒
+            {
+                const raw = String(v ?? "").trim();
+                const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+                    ? `${raw}T00:00:00`
+                    : raw.replace(" ", "T");
+                return `<input type="datetime-local" step="1" data-fkey="${esc(field.key)}" value="${esc(iso)}">`;
+            }
+        case "textarea":
+            return `<textarea class="field-textarea" rows="4" data-fkey="${esc(field.key)}">${esc(v)}</textarea>`;
         case "stringArray":
         case "urlArray":
             return arrayEditorHtml(field.key, Array.isArray(v) ? v : [], field.type === "urlArray");
@@ -610,7 +773,7 @@ function arrayEditorHtml(key, items, isUrl) {
   </div>`;
 }
 
-function renderContentForm(detail, isNew) {
+function renderContentForm(detail, isNew, extraHtml = "") {
     const m = state.module;
     const rows = (m.fields || [])
         .map((f) => {
@@ -629,11 +792,13 @@ function renderContentForm(detail, isNew) {
                 } else if (f.type === "date" && !v) {
                     // 新建时日期字段默认填入当天，避免浏览器显示 yyyy/mm/日 占位符
                     initialValue = todayStr();
+                } else if (f.type === "datetime" && !v) {
+                    initialValue = nowDateTimeStr();
                 }
             }
             let control = fieldControlHtml(f, initialValue);
-            if (f.type === "url" && f.media && typeof v === "string" && v) {
-                control += mediaPreviewHtml(v);
+            if (f.media && typeof initialValue === "string" && initialValue.trim()) {
+                control += mediaPreviewHtml(initialValue.trim());
             }
             return `<div class="form-row" data-field-row="${esc(f.key)}">
         <div class="row-head"><label>${esc(f.label)}${req}</label>${help}</div>
@@ -662,7 +827,7 @@ function renderContentForm(detail, isNew) {
     }
 
     return `<form class="form" id="content-form">
-    ${errTip}${unknownTip}${rows}${bodyEditor}
+    ${errTip}${unknownTip}${extraHtml}${rows}${bodyEditor}
     <div class="form-foot">
       <button type="submit" class="btn btn-primary">💾 保存</button>
       <button type="button" class="btn" data-cancel>返回列表</button>
@@ -770,7 +935,12 @@ function collectFormData(formEl) {
             // 枚举下拉：选项值全为数字时（如 status 1~5）写回数字，而不是字符串
             const numEnum =
                 fd?.enum && fd.enum.length && fd.enum.every((o) => typeof o.value === "number");
-            data[el.dataset.fkey] = numEnum ? Number(el.value) : el.value;
+            let val = numEnum ? Number(el.value) : el.value;
+            // datetime-local 值「YYYY-MM-DDTHH:mm[:ss]」→ 存储格式「YYYY-MM-DD HH:mm:ss」
+            if (fd?.type === "datetime" && typeof val === "string" && val) {
+                val = val.replace("T", " ").replace(/^(.{16})$/, "$1:00");
+            }
+            data[el.dataset.fkey] = val;
         }
     });
     const arrs = {};
@@ -788,18 +958,37 @@ function collectFormData(formEl) {
     return {data, body: bodyEl ? bodyEl.value : undefined};
 }
 
-async function openCreate() {
-    setPanelTitle(`${state.module.name} · 新建`);
+async function openCreate(group = "") {
+    const m = state.module;
+    setPanelTitle(`${m.name} · 新建`);
+    let groups = [];
+    if (m.grouped) {
+        groups = await api(`/api/content/${m.id}/groups`);
+    }
+    const groupRow = m.grouped
+        ? `<div class="form-row">
+      <div class="row-head"><label>所属分组</label><span class="help">分组对应博客中的分类目录，新建后不可在编辑页直接移动</span></div>
+      <select id="new-group" data-fkey="__group">
+        <option value=""${group === "" ? " selected" : ""}>（未分组 / 根目录）</option>
+        ${groups
+            .map((g) => `<option value="${esc(g.id)}"${g.id === group ? " selected" : ""}>${esc(g.name || g.id)}</option>`)
+            .join("")}
+      </select>
+    </div>`
+        : "";
     const panel = $("#content-panel");
-    panel.innerHTML = renderContentForm(null, true);
+    panel.innerHTML = renderContentForm(null, true, groupRow);
     const form = $("#content-form");
     bindArrayEditor(form);
     form.querySelector("[data-cancel]").onclick = renderModuleList;
     form.onsubmit = async (e) => {
         e.preventDefault();
         const {data, body} = collectFormData(form);
+        delete data.__group;
+        const payload = {data, body};
+        if (m.grouped) payload.group = form.querySelector("#new-group")?.value ?? "";
         try {
-            const r = await api(`/api/content/${state.module.id}`, {method: "POST", body: {data, body}});
+            const r = await api(`/api/content/${m.id}`, {method: "POST", body: payload});
             toast(`已创建 ${r.filename}`, "ok");
             await renderModuleList();
         } catch (err) {
@@ -810,7 +999,7 @@ async function openCreate() {
 
 async function openEdit(id) {
     try {
-        const detail = await api(`/api/content/${state.module.id}/${id}`);
+        const detail = await api(`/api/content/${state.module.id}/${encId(id)}`);
         setPanelTitle(`${state.module.name} · ${detail.filename}`);
         const panel = $("#content-panel");
         panel.innerHTML = renderContentForm(detail, false);
@@ -823,7 +1012,7 @@ async function openEdit(id) {
             e.preventDefault();
             const {data, body} = collectFormData(form);
             try {
-                await api(`/api/content/${state.module.id}/${id}`, {method: "PUT", body: {data, body}});
+                await api(`/api/content/${state.module.id}/${encId(id)}`, {method: "PUT", body: {data, body}});
                 toast("保存成功（YAML 引号风格已保留）", "ok");
                 await renderModuleList();
             } catch (err) {
@@ -836,9 +1025,10 @@ async function openEdit(id) {
 }
 
 async function deleteItem(id) {
-    confirmModal("删除确认", `确定删除「${id}」吗？<br>删除前会自动备份，可在「备份与恢复」中还原。`, async () => {
+    const m = state.module;
+    confirmModal("删除确认", `确定删除「${esc(id)}」吗？<br>删除前会自动备份，可在「备份与恢复」中还原。`, async () => {
         try {
-            await api(`/api/content/${state.module.id}/${id}`, {method: "DELETE"});
+            await api(`/api/content/${m.id}/${encId(id)}`, {method: "DELETE"});
             toast("已删除（已自动备份）", "ok");
             await renderModuleList();
         } catch (err) {
@@ -924,16 +1114,21 @@ function renderNotebooks(list) {
         return `<div class="empty-hint">还没有笔记本 ~ 点击右上角「＋ 新建」创建第一本</div>`;
     }
     return `<div class="notebook-grid">${list
-        .map(
-            (nb) => `<div class="note-card" data-nb="${esc(nb.id)}">
-        ${nb.cover ? `<img class="nc-cover" src="${esc(nb.cover)}" alt="cover" loading="lazy" onerror="this.remove()">` : ""}
+        .map((nb) => {
+            const f = nb.fields || {};
+            const cover = f.cover || f.image || "";
+            const tags = Array.isArray(f.tags) ? f.tags : [];
+            return `<div class="note-card" data-nb="${esc(nb.id)}">
+        ${cover ? `<img class="nc-cover" src="${esc(cover)}" alt="cover" loading="lazy" onerror="this.remove()">` : ""}
         <div class="nc-name">${esc(nb.name)}${nb.error ? `<span class="badge">⚠ ${esc(nb.error)}</span>` : ""}</div>
-        ${nb.summary ? `<div class="nc-summary">${esc(nb.summary)}</div>` : ""}
-        <div class="nc-meta">${nb.noteCount} 篇笔记
+        ${f.title ? `<div class="nc-summary">${esc(f.title)}</div>` : ""}
+        ${f.summary ? `<div class="nc-summary">${esc(f.summary)}</div>` : ""}
+        ${tags.length ? `<div class="gc-meta">${tags.map((t) => `<span class="tag tag-cat">${esc(t)}</span>`).join(" ")}</div>` : ""}
+        <div class="nc-meta">${nb.noteCount} 篇笔记${nb.latestDate ? ` · 最近 ${esc(nb.latestDate)}` : ""}
           <button class="btn btn-sm mini nc-preview" data-preview="${esc(nb.id)}">预览</button>
         </div>
-      </div>`,
-        )
+      </div>`;
+        })
         .join("")}</div>`;
 }
 
@@ -951,19 +1146,19 @@ function bindNotebookCards(panel) {
 
 async function openNotebook(id) {
     try {
-        const nb = await api(`/api/content/notebooks/${id}`);
+        const nb = await api(`/api/content/notebooks/${encId(id)}`);
         state.nb = nb;
         setPanelTitle(`笔记本 · ${nb.name}`);
         const m = state.module;
 
-        // 笔记本表单（_index.json）：元信息在 API 返回顶层（name/cover/summary）
+        // 笔记本表单（_index.json）：元信息在 API 返回的 fields 中
         const nbRows = (m.fields || [])
             .map((f) => {
-                const v = nb[f.key] !== undefined ? nb[f.key] : undefined;
+                const v = nb.fields ? nb.fields[f.key] : undefined;
                 const req = f.required ? `<span class="req">*</span>` : "";
                 const help = f.help ? `<span class="help">${esc(f.help)}</span>` : "";
                 let control = fieldControlHtml(f, v);
-                if (f.type === "url" && f.media && typeof v === "string" && v) control += mediaPreviewHtml(v);
+                if (f.media && typeof v === "string" && v.trim()) control += mediaPreviewHtml(v.trim());
                 return `<div class="form-row"><div class="row-head"><label>${esc(f.label)}${req}</label>${help}</div>${control}</div>`;
             })
             .join("");
@@ -1019,7 +1214,7 @@ async function openNotebook(id) {
         nbForm.querySelector("[data-nb-save]").onclick = async () => {
             const {data} = collectFormData(nbForm);
             try {
-                await api(`/api/content/notebooks/${nb.id}`, {method: "PUT", body: {data}});
+                await api(`/api/content/notebooks/${encId(nb.id)}`, {method: "PUT", body: {data}});
                 toast("笔记本信息已保存", "ok");
                 await openNotebook(nb.id);
             } catch (err) {
@@ -1029,7 +1224,7 @@ async function openNotebook(id) {
         nbForm.querySelector("[data-nb-del]").onclick = () =>
             confirmModal("删除整本", `确定删除笔记本「${nb.name}」吗？<br>整目录会快照备份，可在「备份与恢复」中还原。`, async () => {
                 try {
-                    await api(`/api/content/notebooks/${nb.id}`, {method: "DELETE"});
+                    await api(`/api/content/notebooks/${encId(nb.id)}`, {method: "DELETE"});
                     toast("已删除（目录快照已备份）", "ok");
                     state.nb = null;
                     await renderModuleList();
@@ -1051,7 +1246,7 @@ async function openNotebook(id) {
             (el.onclick = () =>
                 confirmModal("删除笔记", `确定删除笔记「${el.dataset.noteDel}」吗？<br>删除前会自动备份。`, async () => {
                     try {
-                        await api(`/api/content/notebooks/${nb.id}/notes/${el.dataset.noteDel}`, {method: "DELETE"});
+                        await api(`/api/content/notebooks/${encId(nb.id)}/notes/${encId(el.dataset.noteDel)}`, {method: "DELETE"});
                         toast("已删除（已自动备份）", "ok");
                         await openNotebook(nb.id);
                     } catch (err) {
@@ -1070,7 +1265,7 @@ async function openNoteForm(notebookId, noteId, isEdit = false) {
     let detail = null;
     if (isEdit) {
         try {
-            detail = await api(`/api/content/notebooks/${notebookId}/notes/${noteId}`);
+            detail = await api(`/api/content/notebooks/${encId(notebookId)}/notes/${encId(noteId)}`);
         } catch (err) {
             toast(err.message, "err");
             return;
@@ -1085,7 +1280,7 @@ async function openNoteForm(notebookId, noteId, isEdit = false) {
             const req = f.required ? `<span class="req">*</span>` : "";
             const help = f.help ? `<span class="help">${esc(f.help)}</span>` : "";
             let control = fieldControlHtml(f, v);
-            if (f.type === "url" && f.media && typeof v === "string" && v) control += mediaPreviewHtml(v);
+            if (f.media && typeof v === "string" && v.trim()) control += mediaPreviewHtml(v.trim());
             return `<div class="form-row"><div class="row-head"><label>${esc(f.label)}${req}</label>${help}</div>${control}</div>`;
         })
         .join("");
@@ -1120,10 +1315,10 @@ async function openNoteForm(notebookId, noteId, isEdit = false) {
         const {data, body} = collectFormData(form);
         try {
             if (isEdit) {
-                await api(`/api/content/notebooks/${notebookId}/notes/${noteId}`, {method: "PUT", body: {data, body}});
+                await api(`/api/content/notebooks/${encId(notebookId)}/notes/${encId(noteId)}`, {method: "PUT", body: {data, body}});
                 toast("笔记已保存", "ok");
             } else {
-                const r = await api(`/api/content/notebooks/${notebookId}/notes`, {method: "POST", body: {data, body}});
+                const r = await api(`/api/content/notebooks/${encId(notebookId)}/notes`, {method: "POST", body: {data, body}});
                 toast(`笔记已创建 ${r.filename}`, "ok");
             }
             await openNotebook(notebookId);
@@ -1137,7 +1332,8 @@ async function openNoteForm(notebookId, noteId, isEdit = false) {
 async function openNoteRestore(notebookId) {
     try {
         const list = await api(`/api/content/notebooks/backups`);
-        const files = list.filter((b) => !b.isDirSnapshot);
+        // 笔记备份 origin 形如「笔记本ID__笔记文件名」，只列出当前笔记本的备份
+        const files = list.filter((b) => !b.isDirSnapshot && b.origin.startsWith(`${notebookId}__`));
         if (!files.length) {
             openModal("恢复笔记", `<div class="empty-hint">暂无笔记文件备份</div>`);
             return;
@@ -1158,7 +1354,7 @@ async function openNoteRestore(notebookId) {
             (b.onclick = () => {
                 confirmModal("恢复确认", `确定用「${b.dataset.r}」恢复吗？`, async () => {
                     try {
-                        await api(`/api/content/notebooks/${notebookId}/notes/placeholder/restore`, {
+                        await api(`/api/content/notebooks/${encId(notebookId)}/restore-note`, {
                             method: "POST",
                             body: {backupName: b.dataset.r},
                         });
@@ -1252,11 +1448,11 @@ function groupFields(fields) {
         const gname = segs[0].prop;
         if (!groups.has(gname)) groups.set(gname, {nested: [], elems: new Map()});
         const g = groups.get(gname);
-        // 找第一个 [索引] 段：对象数组元素字段（如 local.playlist[0].name）
-        const idxPos = segs.findIndex((s) => s.idx !== undefined);
-        if (idxPos > 0) {
-            const prefix = segs.slice(1, idxPos).map((s) => s.prop).join(".");
-            const elemKey = `${prefix}[${segs[idxPos].idx}]`;
+        // 对象数组元素字段（如 leftComponents[0].type / local.playlist[0].name）：
+        // 元素 key 取 keyPath 中第一段下标结尾，保留其前面的完整属性路径，避免不同层级元素互相合并
+        const bracketEnd = f.keyPath.indexOf("]");
+        if (bracketEnd > 0 && f.keyPath.indexOf("[") > 0) {
+            const elemKey = f.keyPath.slice(0, bracketEnd + 1);
             if (!g.elems.has(elemKey)) g.elems.set(elemKey, {entries: []});
             g.elems.get(elemKey).entries.push(f);
         } else {
@@ -1276,7 +1472,7 @@ const CFG_WORD_ZH = {
     menuAlign: "菜单对齐", stickyNavbar: "吸顶导航", siteStartDate: "建站日期", timezone: "时区",
     pages: "页面开关", friends: "友链", sponsor: "赞助", guestbook: "留言板", bangumi: "番剧",
     gallery: "相册", anime: "动漫", books: "书架", movies: "影视", games: "游戏",
-    musicPage: "音乐页面", changelog: "更新日志", routines: "日常规划", places: "足迹", notebooks: "笔记本",
+    changelog: "更新日志", routines: "日常规划", places: "足迹", notebooks: "笔记本",
     categoryBar: "分类栏", foldArticle: "折叠文章", postListLayout: "文章列表布局", showTags: "显示标签",
     descriptionLines: "简介行数", allowSwitch: "允许切换布局", grid: "网格", masonry: "瀑布流",
     columnWidth: "列宽", post: "文章", rehypeCallouts: "提示框", showLastModified: "显示修改时间",
@@ -1332,7 +1528,7 @@ const CFG_WORD_ZH = {
     password: "访问密码", passwordHint: "密码提示", imgurl: "头像", siteurl: "站点链接",
     weight: "权重", tags: "标签", published: "发布日期", updated: "更新时间", draft: "草稿",
     pinned: "置顶", categoryId: "分类 ID", featured: "推荐", order: "排序值", circle: "推文",
-    moments: "朋友圈", bills: "账单",
+    moments: "朋友圈",
 };
 
 /** 配置字段中文标签：逐段翻译 keyPath（未收录词保留英文，camelCase 拆分兜底） */
@@ -1520,8 +1716,12 @@ function reindexConfigArray(root) {
 }
 
 /* ============ 全站访问口令：受保护页面快捷勾选 ============ */
-/** 博客可直接勾选受保护的页面栏目（路径前缀 + 展示名） */
+/** 博客可直接勾选受保护的页面栏目（路径前缀 + 展示名；与 src/pages 路由保持一致） */
 const ACCESS_KNOWN_PAGES = [
+    ["/posts/", "全部文章"],
+    ["/archive/", "归档"],
+    ["/categories/", "分类"],
+    ["/tags/", "标签"],
     ["/gallery/", "相册"],
     ["/books/", "书架"],
     ["/games/", "游戏"],
@@ -1529,13 +1729,17 @@ const ACCESS_KNOWN_PAGES = [
     ["/travel/", "足迹"],
     ["/plans/", "规划"],
     ["/notebooks/", "笔记本"],
-    ["/bills/", "账单"],
-    ["/posts/", "全部文章"],
-    ["/about/", "关于"],
-    ["/guestbook/", "留言板"],
-    ["/archive/", "归档"],
+    ["/friends/", "友链"],
+    ["/website/", "网站导航"],
     ["/moments/", "朋友圈"],
     ["/circle/", "推文"],
+    ["/bangumi/", "番组计划"],
+    ["/anime/", "追番"],
+    ["/changelog/", "更新日志"],
+    ["/sponsor/", "打赏"],
+    ["/guestbook/", "留言板"],
+    ["/about/", "关于"],
+    ["/search/", "搜索"],
 ];
 const ACCESS_KNOWN_SET = new Set(ACCESS_KNOWN_PAGES.map((k) => k[0]));
 
@@ -1829,12 +2033,10 @@ const NAV_PAGE_KEYS = [
     ["books", "书架开关"],
     ["movies", "影视开关"],
     ["games", "游戏开关"],
-    ["musicPage", "音乐页面开关"],
     ["changelog", "更新日志开关"],
     ["routines", "规划开关"],
     ["places", "足迹开关"],
     ["notebooks", "笔记本开关"],
-    ["bills", "账单开关"],
 ];
 
 /** 沿「路径段」数组在树中取节点（段为数字=数组下标，字符串=对象键） */
@@ -1854,8 +2056,8 @@ function navCleanNode(n) {
     const out = {name: stringish(n.name), url: stringish(n.url)};
     if (n.enabled === true || n.enabled === false) out.enabled = !!n.enabled;
     else out.enabled = true;
-    // 外链自动判断：URL 以 http(s):// 或 // 开头即视为外链（博客端 url() 原样返回，新窗口打开）
-    if (/^(https?:)?\/\//.test(out.url)) out.external = true;
+    // 外链：显式标记为外链，或 URL 以 http(s):// 或 // 开头（博客端按 external 决定是否新窗口打开）
+    if (n.external === true || /^(https?:)?\/\//.test(out.url)) out.external = true;
     if (n.icon) out.icon = String(n.icon);
     if (n.pageKey) out.pageKey = String(n.pageKey);
     if (Array.isArray(n.children) && n.children.length) {
@@ -2175,8 +2377,15 @@ function renderConfigPanel(read) {
         const record = () => {
             let v;
             if (el.type === "checkbox") v = el.checked;
-            else if (el.type === "number") v = el.value === "" ? "" : Number(el.value);
-            else v = el.value;
+            else if (el.type === "number") {
+                // 配置为 TS 类型约束，数字字段无法写成 null/空串：留空即视为保持原值
+                if (el.value === "") {
+                    state.changes.delete(keyPath);
+                    refreshConfigSaveCount();
+                    return;
+                }
+                v = Number(el.value);
+            } else v = el.value;
             if (orig && v === orig.value) state.changes.delete(keyPath);
             else state.changes.set(keyPath, {value: v, hasQuote: orig?.hasQuote});
             refreshConfigSaveCount();
@@ -2431,7 +2640,7 @@ function init() {
     });
 
     // 内容面板按钮
-    $("#btn-create").onclick = openCreate;
+    $("#btn-create").onclick = () => openCreate();
     $("#btn-backups").onclick = openBackups;
     $("#btn-save-config").onclick = saveTarget;
 

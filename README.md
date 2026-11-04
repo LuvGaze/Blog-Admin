@@ -8,14 +8,14 @@ Blog 博客项目的独立后端管理工具：通过浏览器对博客内容（
 
 ## 功能特性
 
-- **内容管理**：14 个内容模块（文章 / 相册 / 笔记 / 书架 / 游戏 / 影视 / 友链 / 朋友圈 / 规划 / 旅行 / 账单 / 网站导航 /
-  更新日志 / 关于我）的可视化增删改查。
-- **表单化编辑**：按模块字段定义自动渲染表单，支持字符串、日期、数组、URL 媒体预览等控件；YAML 引号风格与换行风格**原样保留**
-  写回。
+- **内容管理**：15 个内容模块（文章 / 相册 / 笔记 / 书架 / 游戏 / 影视 / 友链 / 朋友圈 / 规划 / 旅行 / 网站导航 /
+  更新日志 / 关于我 / 友链页配置 / 留言板）的可视化增删改查，友链与网站导航支持**文件夹分组管理**。
+- **表单化编辑**：按模块字段定义自动渲染表单，支持字符串、多行文本、日期、数组、URL 媒体预览等控件；YAML 引号风格与换行风格**原样保留**
+  写回；提交空值即删除该字段，未提交字段保持原样。
 - **Markdown 正文**：带独立正文编辑器，frontmatter 与正文分离维护。
 - **一键预览**：列表与编辑页底部均可直接跳转博客对应页面查看效果。
 - **备份与恢复**：更新 / 删除自动备份，支持手动整模块快照、单条恢复与单条删除。
-- **配置管理**：站点、侧边栏、评论、音乐、页脚等 TypeScript 配置文件在线编辑（AST 结构化改写，保留注释与格式）。
+- **配置管理**：基础 / 页面布局 / 内容与文章 / 互动功能 / 外观美化 五类共 25 个 TypeScript 配置文件在线编辑（AST 结构化改写，保留注释与格式）。
 - **免构建前端**：原生 HTML / CSS / JS，牛皮纸手绘主题，开箱即用。
 
 ## 技术栈
@@ -87,7 +87,7 @@ admin/
 │   │   │   ├── registry.ts       # 模块注册与 service 获取（数组顺序 = 侧边栏顺序）
 │   │   │   ├── baseMultiFile.ts  # 通用 md / md+json 模块服务（列表/读取/新建/保存/删除/备份/恢复）
 │   │   │   ├── notebooksService.ts  # 笔记本专用（目录 + _index.json + 笔记 md）
-│   │   │   └── modules/          # 各模块字段定义（posts/gallery/books/games/movies/friends/moments/plans/travel/bills/website/changelog/about）
+│   │   │   └── modules/          # 各模块字段定义（posts/gallery/books/games/movies/friends/moments/plans/travel/website/changelog/about/specPages）
 │   │   ├── config/         # 配置目标注册（targets.ts：站点 / 侧边栏 / 评论 / 音乐 / 页脚 ...）
 │   │   ├── tsAstService.ts # TS 配置文件的 AST 编辑
 │   │   └── yamlService.ts  # YAML frontmatter 解析与归一化
@@ -103,27 +103,36 @@ admin/
 
 ## 内容模块
 
-后台「内容管理」支持以下 14 个模块（数据源均为博客 `src/content/` 下的真实文件）：
+后台「内容管理」支持以下 15 个模块（数据源均为博客 `src/content/` 下的真实文件）：
 
-| 模块 ID     | 名称   | 目录              | 预览前缀          | 说明                            |
-|-----------|------|-----------------|---------------|-------------------------------|
-| posts     | 文章   | `posts/`        | `/posts/`     | 博客文章                          |
-| gallery   | 相册   | `gallery/`      | `/gallery/`   | 相册集                           |
-| notebooks | 笔记   | `notebooks/`    | `/notebooks/` | 目录 + `_index.json` + 笔记（专用服务） |
-| books     | 书架   | `books/`        | `/books/`     | 书籍条目（category=book）           |
-| games     | 游戏   | `games/`        | `/games/`     | 游戏条目（category=game）           |
-| movies    | 影视   | `movies/`       | `/movies/`    | 影视条目（category=real）           |
-| friends   | 友链   | `friends/`      | `/friends`    | 友情链接                          |
-| moments   | 朋友圈  | `moments/`      | `/moments/`   | 朋友圈说说（发布时间/置顶/图片/位置/标签，带正文）   |
-| plans     | 规划   | `plans/`        | `/plans`      | 日常规划条目                        |
-| travel    | 旅行   | `travel/`       | `/travel/`    | 到访地点（visitCount 正整数校验）        |
-| bills     | 账单   | `bills/`        | `/bills/`     | 账单流水（金额、日期、时间、标签等）            |
-| website   | 网站导航 | `website/`      | `/website/`   | 友链 / 常用网站导航                   |
-| changelog | 更新日志 | `changelog/`    | `/changelog/` | 版本日志，列表按日期倒序                  |
-| about     | 关于我  | `spec/about.md` | `/about`      | 单文件正文                         |
+| 模块 ID       | 名称     | 目录 / 文件              | 预览前缀           | 说明                                    |
+|-------------|--------|----------------------|----------------|---------------------------------------|
+| posts       | 文章     | `posts/`             | `/posts/`      | 博客文章（草稿 → 置顶 → order → 发布日期）          |
+| gallery     | 相册     | `gallery/`           | `/gallery/`    | 相册集                                   |
+| notebooks   | 笔记     | `notebooks/`         | `/notebooks/`  | 目录 + `_index.json` + 笔记（专用服务）           |
+| books       | 书架     | `books/`             | `/books/`      | 书籍条目                                  |
+| games       | 游戏     | `games/`             | `/games/`      | 游戏条目                                  |
+| movies      | 影视     | `movies/`            | `/movies/`     | 影视条目（movie / tv / anime / documentary） |
+| friends     | 友链     | `friends/`           | `/friends/`    | 友情链接（**按文件夹分组**，分组元数据 `_index.json`）    |
+| moments     | 朋友圈    | `moments/`           | `/moments/`    | 说说（发布时间 / 置顶 / 图片 / 位置 / 标签，带正文）       |
+| plans       | 规划     | `plans/`             | `/plans/`      | 日常规划条目（order 越小越靠前，缺省 999）            |
+| travel      | 旅行     | `travel/`            | `/travel/`     | 到访地点（visitCount 正整数校验）                 |
+| website     | 网站导航   | `website/`           | `/website/`    | 站点导航（**按文件夹分组**，分组元数据 `_index.json`）    |
+| changelog   | 更新日志   | `changelog/`         | `/changelog/`  | 版本日志（日期 → 版本号 → 时间倒序）                  |
+| about       | 关于我    | `spec/about.mdx`     | `/about/`      | 单文件 MDX 正文（无 frontmatter）              |
+| specFriends | 友链页配置  | `spec/friends.mdx`   | `/friends/`    | 友链页标题 / 描述（单文件）                       |
+| guestbook   | 留言板    | `spec/guestbook.md`  | `/guestbook/`  | 留言板页标题 / 描述（单文件）                      |
 
 > 侧边栏模块顺序 = `registry.ts` 中 `contentModules` 数组顺序（notebooks 已包含在内），调整顺序只需移动数组元素。
 > 新增 / 修改模块：在 `src/services/content/modules/` 下创建模块定义文件，并在 `registry.ts` 中注册即可。
+
+### 文件夹分组（友链 / 网站导航）
+
+- 条目所属分组由**目录结构**决定：`friends/分组名/文件.md`，列表接口返回 `group`（根目录条目为 `""`）。
+- 分组元数据保存在各分组的 `_index.json`：友链为 `name / title / description / sort`（sort 越大越靠前），网站导航为
+  `name / icon / order`（order 越大越靠前）。
+- 后台列表按分组渲染，可新建分组、编辑分组元数据、删除空分组；在分组内可「＋ 新建条目」。
+- 相关接口：`GET/POST /api/content/:module/groups`、`PUT/DELETE /api/content/:module/groups/:groupId`。
 
 ### 内容编辑器
 
@@ -137,8 +146,10 @@ admin/
 
 ## 配置管理
 
-后台「配置管理」通过 TS AST 结构化改写博客 `src/config/` 下的配置文件，覆盖站点、侧边栏布局、个人资料、导航栏、导航菜单（*
-*专用树形编辑器**：父菜单/子项增删、排序、改名、显隐、配图标、外链、关联页面开关）、评论、音乐播放器、天气预报、页脚、代码块、动画特效、背景壁纸、公告、统计分析等目标，保留原有注释与格式。具体目标清单见
+后台「配置管理」通过 TS AST 结构化改写博客 `src/config/` 下的配置文件，共 25 个 target，按「基础 / 页面布局 / 内容与文章 / 互动功能 /
+外观美化」五类分组展示，覆盖站点、个人资料、导航栏、导航菜单（**专用树形编辑器**：父菜单/子项增删、排序、改名、显隐、配图标、外链、关联页面开关）、
+赞助、恋爱计时器、全站访问口令、侧边栏布局、音乐播放器、天气预报、版权许可、页脚（含 `FooterConfig.html`）、代码块、动画特效、文章封面、
+评论、背景壁纸、公告、统计分析、朋友圈、鼠标指针、全局字体、追番数据源等，保留原有注释与格式。具体目标清单见
 `src/services/config/targets.ts`。
 
 ## API 概览
@@ -148,8 +159,10 @@ admin/
 | POST           | `/api/auth/login`                    | 登录，返回 Bearer Token          |
 | GET            | `/api/health`                        | 健康检查（含博客地址信息）               |
 | GET            | `/api/modules`                       | 内容模块清单 + 字段定义               |
-| GET/POST       | `/api/content/:module`               | 列表 / 新建条目                   |
+| GET/POST       | `/api/content/:module`               | 列表 / 新建条目（body 可带 `group`）    |
 | GET/PUT/DELETE | `/api/content/:module/:id`           | 读取 / 保存 / 删除条目              |
+| GET/POST       | `/api/content/:module/groups`        | 分组列表 / 新建分组                 |
+| PUT/DELETE     | `/api/content/:module/groups/:gid`   | 更新 / 删除空分组                  |
 | GET/POST       | `/api/content/:module/backups`       | 备份列表 / 手动创建整模块备份            |
 | DELETE         | `/api/content/:module/backups/:name` | 删除指定备份（文件备份 / 目录快照）         |
 | POST           | `/api/content/:module/restore`       | 恢复备份（body `{ backupName }`） |

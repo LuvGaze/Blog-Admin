@@ -31,6 +31,7 @@ export function validateFields(def: Pick<ContentModuleDef, "fields">, values: Re
     if (empty) continue;
     switch (field.type) {
       case "string":
+      case "textarea":
         if (typeof v !== "string") throw badRequest(`「${field.label}」必须为字符串`);
         break;
       case "number":

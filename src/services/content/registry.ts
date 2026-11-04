@@ -1,5 +1,5 @@
 /**
- * 内容模块注册表：聚合全部 14 个内容模块，统一服务入口
+ * 内容模块注册表：聚合全部 15 个内容模块，统一服务入口
  * 单/多文件 md 模块 → MultiFileContentService；notebooks → NotebooksService
  */
 import type { ContentModuleDef } from "../../types/content.js";
@@ -17,8 +17,8 @@ import { moviesModule } from "./modules/movies.js";
 import { momentsModule } from "./modules/moments.js";
 import { plansModule } from "./modules/plans.js";
 import { postsModule } from "./modules/posts.js";
+import { friendsSpecModule, guestbookSpecModule } from "./modules/specPages.js";
 import { travelModule } from "./modules/travel.js";
-import { billsModule } from "./modules/bills.js";
 
 /**
  * notebooks 特殊模块元数据（仅用于侧边栏排序与清单展示）
@@ -47,10 +47,11 @@ export const contentModules: ContentModuleDef[] = [
   momentsModule,    /** 朋友圈 */
   plansModule,      /** 规划 */
   travelModule,     /** 旅行 */
-  billsModule,      /** 账单 */
   websiteModule,    /** 网站导航 */
   changelogModule,  /** 更新日志 */
   aboutModule,      /** 关于我 */
+  friendsSpecModule, /** 友链页文案 */
+  guestbookSpecModule, /** 留言板文案 */
 ];
 
 /** notebooks 特殊模块（目录 + _index.json + 笔记 md） */
@@ -82,11 +83,18 @@ export function isNotebooksModule(moduleId: string): boolean {
 }
 
 /** 模块清单（供前端渲染模块导航；顺序 = contentModules 数组顺序） */
-export function listContentModules(): Array<{ id: string; name: string; isNotebooks: boolean; urlPrefix: string }> {
+export function listContentModules(): Array<{
+  id: string;
+  name: string;
+  isNotebooks: boolean;
+  urlPrefix: string;
+  grouped: boolean;
+}> {
   return contentModules.map((m) => ({
     id: m.id,
     name: m.name,
     isNotebooks: m.id === notebooksService.id,
     urlPrefix: m.urlPrefix,
+    grouped: Boolean(m.groupMeta),
   }));
 }

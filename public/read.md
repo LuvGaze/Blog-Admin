@@ -71,7 +71,7 @@ admin/
 │   │   │   ├── registry.ts       # 模块注册与 service 获取
 │   │   │   ├── baseMultiFile.ts  # 通用 md/md json 模块服务（列表/读取/新建/保存/删除/备份）
 │   │   │   ├── notebooksService.ts
-│   │   │   └── modules/          # 各模块字段定义（books/games/movies/changelog/website/friends/gallery/plans/posts/travel/about）
+│   │   │   └── modules/          # 各模块字段定义（posts/gallery/books/games/movies/friends/moments/plans/travel/website/changelog/about/specPages）
 │   │   ├── config/         # 配置目标注册（见下方「配置管理」）
 │   │   ├── tsAstService.ts # TS 配置文件的 AST 读取、更新与「新增缺失字段」
 │   │   └── yamlService.ts  # YAML frontmatter 解析与归一化
@@ -88,35 +88,40 @@ admin/
 
 ## 内容模块
 
-后台「内容管理」支持以下模块（数据源均为博客 `src/content/` 下的真实文件）：
+后台「内容管理」支持以下 15 个模块（数据源均为博客 `src/content/` 下的真实文件）：
 
-| 模块 ID       | 名称   | 目录              | 预览前缀              | 说明                            |
-|-------------|------|-----------------|-------------------|-------------------------------|
-| `books`     | 书架   | `books/`        | `/books/`         | 书籍条目（category=book）           |
-| `games`     | 游戏   | `games/`        | `/games/`         | 游戏条目（category=game）           |
-| `movies`    | 影视   | `movies/`       | `/movies/`        | 影视条目（category=real）           |
-| `changelog` | 更新日志 | `changelog/`    | `/changelog/`     | 版本日志，列表按日期倒序                  |
-| `website`   | 网站导航 | `website/`      | `/website/`       | 常用网站导航                        |
-| `friends`   | 友链   | `friends/`      | `/friends/`       | 友情链接                          |
-| `gallery`   | 相册   | `gallery/`      | `/gallery/`       | 相册集                           |
-| `plans`     | 日常规划 | `plans/`        | `/life/routines/` | 规划条目                          |
-| `posts`     | 文章   | `posts/`        | `/posts/`         | 博客文章                          |
-| `travel`    | 足迹   | `travel/`       | `/travel/`        | 到访地点（visitCount 正整数校验）        |
-| `about`     | 关于   | `spec/about.md` | `/about/`         | 单文件正文                         |
-| `notebooks` | 笔记本  | `notebooks/`    | `/notebooks/`     | 目录 + `_index.json` + 笔记（专用服务） |
+| 模块 ID       | 名称     | 目录 / 文件              | 预览前缀           | 说明                                    |
+|-------------|--------|----------------------|----------------|---------------------------------------|
+| `posts`     | 文章     | `posts/`             | `/posts/`      | 博客文章（草稿 → 置顶 → order → 发布日期）          |
+| `gallery`   | 相册     | `gallery/`           | `/gallery/`    | 相册集                                   |
+| `notebooks` | 笔记本    | `notebooks/`         | `/notebooks/`  | 目录 + `_index.json` + 笔记（专用服务）           |
+| `books`     | 书架     | `books/`             | `/books/`      | 书籍条目                                  |
+| `games`     | 游戏     | `games/`             | `/games/`      | 游戏条目                                  |
+| `movies`    | 影视     | `movies/`            | `/movies/`     | 影视条目（movie / tv / anime / documentary） |
+| `friends`   | 友链     | `friends/`           | `/friends/`    | 友情链接（按文件夹分组）                          |
+| `moments`   | 朋友圈    | `moments/`           | `/moments/`    | 说说（发布时间 / 置顶 / 图片 / 位置 / 标签，带正文）       |
+| `plans`     | 日常规划   | `plans/`             | `/plans/`      | 规划条目（order 越小越靠前，缺省 999）              |
+| `travel`    | 足迹     | `travel/`            | `/travel/`     | 到访地点（visitCount 正整数校验）                 |
+| `website`   | 网站导航   | `website/`           | `/website/`    | 站点导航（按文件夹分组）                          |
+| `changelog` | 更新日志   | `changelog/`         | `/changelog/`  | 版本日志（日期 → 版本号 → 时间倒序）                  |
+| `about`     | 关于我    | `spec/about.mdx`     | `/about/`      | 单文件 MDX 正文（无 frontmatter）              |
+| `specFriends` | 友链页配置 | `spec/friends.mdx`   | `/friends/`    | 友链页标题 / 描述（单文件）                       |
+| `guestbook` | 留言板    | `spec/guestbook.md`  | `/guestbook/`  | 留言板页标题 / 描述（单文件）                      |
 
-新增/修改模块：在 `src/services/content/modules/` 下创建模块定义文件，并在 `registry.ts` 中注册即可。侧边栏模块顺序 =
-`registry.ts` 中 `contentModules` 数组顺序，调整顺序只需移动数组元素。
+> 友链与网站导航按**目录**分组，分组元数据存放在 `_index.json`；后台可新建/编辑/删除空分组，并可在分组内新建条目。
+> 新增/修改模块：在 `src/services/content/modules/` 下创建模块定义文件，并在 `registry.ts` 中注册即可。侧边栏模块顺序 =
+> `registry.ts` 中 `contentModules` 数组顺序，调整顺序只需移动数组元素。
 
 ## 配置管理
 
 后台「配置管理」读取 `src/config/` 下的 TypeScript 配置文件（每个配置对应用户界面上的一个「配置目标」），顶层对象与数组字段全部可视化编辑。当前支持的配置目标见
 `services/config/targets.ts`，包括但不限于：
 
-- **站点基础**：站点信息、导航栏、赞助、评论、License、底部、页脚
-- **页面布局**：侧边栏布局、音乐播放器、天气预报（新增）
-- **外观**：个人资料（含背景图/头像/字号）、默认封面图
-- **互动功能**：恋爱计时器（新增）、全站访问口令（新增）、公告、壁纸、网站统计等
+- **站点基础**：站点信息、导航栏、导航菜单、赞助、评论、License、页脚、公告
+- **页面布局**：侧边栏布局、音乐播放器、天气预报
+- **内容与文章**：PlantUML、代码块、文章封面、追番数据源
+- **外观**：个人资料（含背景图/头像/字号）、动画特效、背景壁纸、鼠标指针、全局字体
+- **互动功能**：恋爱计时器、全站访问口令、统计分析、朋友圈（共 25 个 target）
 
 ### 侧边栏组件编辑
 
@@ -137,8 +142,10 @@ admin/
 | `POST`               | `/api/auth/login`              | 登录，返回 Bearer Token                                  |
 | `GET`                | `/api/health`                  | 健康检查（含博客地址信息）                                       |
 | `GET`                | `/api/modules`                 | 内容模块清单                                              |
-| `GET / POST`         | `/api/content/:module`         | 列表 / 新建条目                                           |
+| `GET / POST`         | `/api/content/:module`         | 列表 / 新建条目（body 可带 `group`）                           |
 | `GET / PUT / DELETE` | `/api/content/:module/:id`     | 读取 / 保存 / 删除条目                                      |
+| `GET / POST`         | `/api/content/:module/groups`  | 分组列表 / 新建分组                                         |
+| `PUT / DELETE`       | `/api/content/:module/groups/:gid` | 更新 / 删除空分组                                      |
 | `GET / POST`         | `/api/content/:module/backups` | 备份列表 / 手动创建整模块备份                                    |
 | `POST`               | `/api/content/:module/restore` | 恢复备份（文件备份 / 目录快照）                                   |
 | `GET`                | `/api/config`                  | 配置目标清单                                              |

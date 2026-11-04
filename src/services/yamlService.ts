@@ -40,9 +40,12 @@ export interface ChangeOp {
 
 /** 分离 frontmatter 与正文：返回 frontmatter 原文（不含 `---`）与正文 */
 export function splitFrontmatter(source: string): { frontmatter: string | null; body: string } {
-  if (!source.startsWith("---")) {
-    return { frontmatter: null, body: source };
+  // 去掉 UTF-8 BOM，避免首行 `---` 判断失败
+  const text = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+  if (!text.startsWith("---")) {
+    return { frontmatter: null, body: text };
   }
+  source = text;
   // 找闭合标记：行首 `---`（下一行）
   const firstNl = source.indexOf("\n");
   if (firstNl < 0) {
@@ -87,6 +90,18 @@ function detectQuote(raw: string): QuoteStyle {
   return "none";
 }
 
+/** YAML 1.1 中会被解析为数字/布尔/null/时间但实际应为字符串的值 */
+export function isAmbiguousYamlString(s: string): boolean {
+  if (/^(?:true|false|yes|no|on|off|null|~)$/i.test(s)) return true;
+  if (/^[-+]?(?:0|[1-9][0-9_]*(?:\.[0-9_]*)?|\.[0-9_]+)(?:e[-+]?[0-9]+)?$/i.test(s)) return true;
+  if (/^0[xob][0-9a-f_]+$/i.test(s)) return true;
+  // 60 进制时间：19:48 / 1:2:3
+  if (/^\d{1,2}(?::[0-5]?\d){1,2}$/.test(s)) return true;
+  // 日期或时间戳：2026-09-14 / 2026-09-14 20:30:00
+  if (/^\d{4}-\d{1,2}-\d{1,2}(?:[ T].*)?$/.test(s)) return true;
+  return false;
+}
+
 /** 字符串是否需要强制双引号（防止 YAML 解析损坏） */
 function needsDoubleQuote(s: string): boolean {
   if (s === "") return true;
@@ -95,10 +110,12 @@ function needsDoubleQuote(s: string): boolean {
   if (/:\s/.test(s) || s.endsWith(":")) return true;
   // `#` 前有空白
   if (/\s#/.test(s) || s.startsWith("#")) return true;
-  // 前后空白
+  // 前后空白（含纯空白字符串）
   if (s !== s.trim()) return true;
   // 行首特殊字符（- ? : , { } [ ] & * ! | > ' " % @ ` 等）
   if (/^[-?:,{}[\]&*!|>'"%@`]/.test(s)) return true;
+  // 会被 YAML 解析为数字 / 布尔 / null / 时间（日期除外，日期字段由调用方决定是否加引号）
+  if (isAmbiguousYamlString(s) && !/^\d{4}-\d{1,2}-\d{1,2}(?:[ T].*)?$/.test(s)) return true;
   return false;
 }
 
@@ -123,6 +140,12 @@ export function formatScalar(value: unknown, quote: QuoteStyle | "auto" = "doubl
   return s;
 }
 
+/** 数组元素文本：字符串若会被 YAML 误判为数字/日期等，强制双引号（数组内不存在 Date 类型） */
+function formatArrayItemText(it: unknown, quote: QuoteStyle): string {
+  if (typeof it === "string" && isAmbiguousYamlString(it)) return formatScalar(it, "double");
+  return formatScalar(it, quote);
+}
+
 /** 解析值：scalar → valueObject / string；seq → string[] */
 function nodeValue(node: yaml.YAMLNode | undefined): unknown {
   if (!node) return null;
@@ -144,7 +167,8 @@ function nodeValue(node: yaml.YAMLNode | undefined): unknown {
 /** 解析 frontmatter（不含 `---`）为扁平字段列表；语法错误时 errors 非空 */
 export function analyzeFrontmatter(frontmatter: string): ParsedFrontmatter {
   const result: ParsedFrontmatter = { fields: [], unknownKeys: [], errors: [] };
-  const doc = yaml.load(frontmatter) as yaml.YamlMap;
+  const doc = yaml.load(frontmatter) as yaml.YamlMap | undefined;
+  if (!doc) return result;
   if (doc.errors && doc.errors.length > 0) {
     result.errors = doc.errors.map((e) => e.message || String(e));
     return result;
@@ -189,8 +213,8 @@ export function extractValues(frontmatter: string): {
     quotes.set(f.key, f.quote);
   }
   // 数组元素引号风格：按值匹配
-  const doc = yaml.load(frontmatter) as yaml.YamlMap;
-  if (!doc.errors || doc.errors.length === 0) {
+  const doc = yaml.load(frontmatter) as yaml.YamlMap | undefined;
+  if (doc && (!doc.errors || doc.errors.length === 0)) {
     for (const pair of doc.mappings ?? []) {
       const key = pair.key?.value;
       if (typeof key !== "string" || !pair.value || pair.value.kind !== yaml.Kind.SEQ) continue;
@@ -211,14 +235,16 @@ export function extractValues(frontmatter: string): {
 /** 生成数组文本：flow `[a, b]` 或 block `  - a`；
  * 配置了 format 时按模块规范（style + 元素引号），未配置时保留原格式（元素沿用原引号） */
 function formatArray(value: unknown[], quotes: Map<string, QuoteStyle> | undefined, frontmatter: string, key: string, format?: YamlFormat): string {
+  // 空数组必须写成 []，否则 block 风格会退化成 `key:`（YAML null）
+  if (value.length === 0) return "[]";
   const nl = frontmatter.includes("\r\n") ? "\r\n" : "\n";
   const fo = format?.overrides?.[key];
   // 未配置模块规范时：检测原数组格式（flow `[` / block `- `）并沿用
   let isFlow = true;
   let indent = "  ";
   if (!fo?.arrayStyle && !format?.arrayStyle) {
-    const doc = yaml.load(frontmatter) as yaml.YamlMap;
-    if (!doc.errors || doc.errors.length === 0) {
+    const doc = yaml.load(frontmatter) as yaml.YamlMap | undefined;
+    if (doc && (!doc.errors || doc.errors.length === 0)) {
       for (const pair of doc.mappings ?? []) {
         if (pair.key?.value === key && pair.value && pair.value.kind === yaml.Kind.SEQ) {
           const seq = pair.value as yaml.YAMLSequence;
@@ -239,7 +265,10 @@ function formatArray(value: unknown[], quotes: Map<string, QuoteStyle> | undefin
   } else {
     isFlow = (fo?.arrayStyle ?? format?.arrayStyle) === "flow";
   }
-  const items = value.map((v) => formatScalar(v, fo?.quote ?? format?.arrayItemQuote ?? quotes?.get(String(v)) ?? "double"));
+  const items = value.map((v) => {
+    const quote = fo?.quote ?? format?.arrayItemQuote ?? quotes?.get(String(v)) ?? "double";
+    return formatArrayItemText(v, quote);
+  });
   if (isFlow) {
     return `[${items.join(", ")}]`;
   }
@@ -257,8 +286,8 @@ export function writeFrontmatter(frontmatter: string, changes: ChangeOp[], forma
     throw err;
   }
   const nl = frontmatter.includes("\r\n") ? "\r\n" : "\n";
-  const doc = yaml.load(frontmatter) as yaml.YamlMap;
-  const pairs = doc.mappings ?? [];
+  const doc = yaml.load(frontmatter) as yaml.YamlMap | undefined;
+  const pairs = doc?.mappings ?? [];
 
   // key → ChangeOp
   const changeMap = new Map<string, ChangeOp>();
@@ -321,8 +350,12 @@ export function writeFrontmatter(frontmatter: string, changes: ChangeOp[], forma
       replacements.push({ start, end, text });
     } else {
       const fo = format?.overrides?.[key];
+      // 调用方显式指定的引号（如防止歧义的双引号）优先，其次模块规范，最后沿用原格式
       const quote: QuoteStyle =
-        fo?.quote ?? (op.quote && op.quote !== "auto" ? op.quote : format?.quote ?? detectQuote(frontmatter.slice(pair.value.startPosition, pair.value.endPosition)));
+        (op.quote && op.quote !== "auto" ? op.quote : undefined) ??
+        fo?.quote ??
+        format?.quote ??
+        detectQuote(frontmatter.slice(pair.value.startPosition, pair.value.endPosition));
       replacements.push({ start: pair.value.startPosition, end: pair.value.endPosition, text: formatScalar(value, quote) });
     }
   }
@@ -335,13 +368,17 @@ export function writeFrontmatter(frontmatter: string, changes: ChangeOp[], forma
     const fo = format?.overrides?.[c.key];
     if (Array.isArray(c.value)) {
       const arrQuote = fo?.quote ?? format?.arrayItemQuote ?? "double";
-      if ((fo?.arrayStyle ?? format?.arrayStyle ?? "flow") === "block") {
-        additions.push(`${c.key}:${nl}${c.value.map((it) => `  - ${formatScalar(it, arrQuote)}`).join(nl)}`);
+      if (c.value.length === 0) {
+        additions.push(`${c.key}: []`);
+      } else if ((fo?.arrayStyle ?? format?.arrayStyle ?? "flow") === "block") {
+        additions.push(`${c.key}:${nl}${c.value.map((it) => `  - ${formatArrayItemText(it, arrQuote)}`).join(nl)}`);
       } else {
-        additions.push(`${c.key}: [${c.value.map((it) => formatScalar(it, arrQuote)).join(", ")}]`);
+        additions.push(`${c.key}: [${c.value.map((it) => formatArrayItemText(it, arrQuote)).join(", ")}]`);
       }
     } else {
-      additions.push(`${c.key}: ${formatScalar(c.value, fo?.quote ?? format?.quote ?? "double")}`);
+      const quote: QuoteStyle =
+        (c.quote && c.quote !== "auto" ? c.quote : undefined) ?? fo?.quote ?? format?.quote ?? "double";
+      additions.push(`${c.key}: ${formatScalar(c.value, quote)}`);
     }
   }
   if (additions.length > 0) {
@@ -371,10 +408,16 @@ export function buildFrontmatterTemplate(
     const fo = format?.overrides?.[k];
     if (Array.isArray(v)) {
       const arrQuote = fo?.quote ?? format?.arrayItemQuote ?? "double";
+      if (v.length === 0) return `${k}: []`;
       if ((fo?.arrayStyle ?? format?.arrayStyle ?? "flow") === "block") {
-        return `${k}:${newline}${v.map((it) => `  - ${formatScalar(it, arrQuote)}`).join(newline)}`;
+        return `${k}:${newline}${v.map((it) => `  - ${formatArrayItemText(it, arrQuote)}`).join(newline)}`;
       }
-      return `${k}: [${v.map((it) => formatScalar(it, arrQuote)).join(", ")}]`;
+      return `${k}: [${v.map((it) => formatArrayItemText(it, arrQuote)).join(", ")}]`;
+    }
+    // 非日期字段的字符串若会被 YAML 误判为数字/布尔/日期，强制双引号；
+    // 但模块显式要求 quote=none（如时间戳字段）时尊重模块声明
+    if (typeof v === "string" && fo?.quote !== "none" && !dateKeys?.has(k) && isAmbiguousYamlString(v)) {
+      return `${k}: ${formatScalar(v, "double")}`;
     }
     const quote: QuoteStyle = fo?.quote ?? (dateKeys?.has(k) ? "none" : format?.quote ?? "double");
     return `${k}: ${formatScalar(v, quote)}`;

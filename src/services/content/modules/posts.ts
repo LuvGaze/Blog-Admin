@@ -1,78 +1,73 @@
 /**
- * posts 文章模块（docs/后端新增Demo/10_posts文章.md）
- * 路径：src/content/posts/*.md；有正文；
- * - image 留空自动写入 `api`（触发随机封面）
- * - 公开文章移除 password/passwordHint，强制 encrypted: false
- * - 加密文章保留 password（明文存储提示）
+ * 文章模块：src/content/posts（集合 posts）
+ * 字段与 src/content.config.ts 的 posts schema 一一对应。
  */
-import type { ContentModuleDef } from "../../../types/content.js";
+import type { ContentModuleDef, ContentListItem } from "../../../types/content.js";
 
-/** 文章 frontmatter 数据结构 */
-export interface PostData {
-  title: string;
-  published: string;
-  pinned?: boolean;
-  description?: string;
-  tags?: string[];
-  category?: string;
-  draft?: boolean;
-  image?: string;
-  encrypted?: boolean;
-  password?: string;
-  passwordHint?: string;
-}
+const draftRank = (item: ContentListItem): number => {
+  const f = item.fields;
+  if (f["draft"] === true) return 0; // 草稿优先展示，便于继续编辑
+  if (f["pinned"] === true) return 1;
+  return 2;
+};
 
 export const postsModule: ContentModuleDef = {
   id: "posts",
   name: "文章",
   dir: "posts",
-  urlPrefix: "/posts/",
   isSingleFile: false,
   hasBody: true,
   titleField: "title",
+  urlPrefix: "/posts/",
   sortOrder: "desc",
   sortKeys: ["published"],
   fields: [
-    { key: "title", label: "文章标题", type: "string", required: true },
+    { key: "title", label: "标题", type: "string", required: true },
     { key: "published", label: "发布日期", type: "date", required: true },
-    { key: "pinned", label: "置顶", type: "boolean", defaultValue: false, help: "true 置顶展示" },
-    { key: "order", label: "手动排序", type: "number", required: false, help: "大于 0 时优先于日期排序，值越大越靠前；不填则按日期从新到旧排" },
-    { key: "description", label: "文章简介", type: "string" },
-    { key: "tags", label: "标签", type: "stringArray" },
-    { key: "category", label: "文章分类", type: "string", required: true },
-    { key: "draft", label: "草稿", type: "boolean", defaultValue: false, help: "true 草稿不对外展示，仅后台可见" },
-    { key: "image", label: "封面标识", type: "string", media: true, help: "留空提交自动填充为 api（随机封面）" },
-    { key: "encrypted", label: "加密标记", type: "boolean", defaultValue: false },
-    {
-      key: "password",
-      label: "访问密码",
-      type: "string",
-      help: "非空开启加密；清空切换为公开文章（明文存储，请勿使用高敏感密码）",
-    },
-    { key: "passwordHint", label: "密码提示", type: "string", help: "仅加密文章生效，公开文章不保留" },
+    { key: "updated", label: "更新日期", type: "date", help: "留空则不显示更新时间" },
+    { key: "draft", label: "草稿", type: "boolean", defaultValue: false },
+    { key: "pinned", label: "置顶", type: "boolean", defaultValue: false },
+    { key: "order", label: "排序权重", type: "number", defaultValue: 0, help: "数字越大越靠前（置顶文章仍排在普通文章之前）" },
+    { key: "category", label: "分类", type: "string", help: "用于分类页与列表筛选，留空则不计入任何分类" },
+    { key: "tags", label: "标签", type: "stringArray", help: "每行一个标签" },
+    { key: "description", label: "摘要", type: "textarea", help: "列表页与 SEO 摘要；留空则使用正文开头" },
+    { key: "image", label: "封面图", type: "string", media: true, defaultValue: "api", help: "图片 URL；填 api 表示使用随机封面" },
+    { key: "lang", label: "语言", type: "string", help: "例如 zh-CN / en；留空使用站点默认" },
+    { key: "author", label: "作者", type: "string", help: "留空使用站点默认作者" },
+    { key: "sourceLink", label: "来源链接", type: "string", help: "转载文章的原文地址" },
+    { key: "licenseName", label: "许可协议名称", type: "string", help: "例如 CC BY-NC-SA 4.0" },
+    { key: "licenseUrl", label: "许可协议链接", type: "string", help: "许可协议的完整 URL" },
+    { key: "comment", label: "允许评论", type: "boolean", defaultValue: true },
+    { key: "password", label: "访问密码", type: "string", help: "留空表示公开；填写后文章正文加密" },
+    { key: "passwordHint", label: "密码提示", type: "string", help: "留空则不显示提示" },
   ],
-  // 与现有文章文件一致：字符串无引号、日期无引号（published 为 z.date() 严格校验）、tags flow 无引号
-  // password：用户输入的访问密码可能含特殊字符或形如纯数字，强制用双引号保证 YAML 解析为字符串
-  yamlFormat: { quote: "none", arrayStyle: "flow", arrayItemQuote: "none", overrides: { password: { quote: "double" } } },
-  normalize: (values) => {
-    // image 默认逻辑：留空自动填充 api
-    if (values.image === undefined || values.image === null || String(values.image).trim() === "") {
-      values.image = "api";
+  normalize: (values, isNew) => {
+    const remove: string[] = [];
+    // 清空密码时同步移除提示，避免残留无效信息
+    if (values["password"] === undefined || values["password"] === "") {
+      if (values["passwordHint"] !== undefined && values["passwordHint"] !== "") values["passwordHint"] = "";
+      remove.push("passwordHint", "password");
+      void isNew;
     }
-    const password = values.password;
-    if (password === undefined || password === null || String(password).trim() === "") {
-      // 公开文章：移除加密相关字段，encrypted 强制 false
-      delete values.password;
-      delete values.passwordHint;
-      values.encrypted = false;
-      return { remove: ["password", "passwordHint"] };
-    }
-    // 加密文章：密码提示为空则移除
-    const hint = values.passwordHint;
-    if (hint === undefined || hint === null || String(hint).trim() === "") {
-      delete values.passwordHint;
-      return { remove: ["passwordHint"] };
-    }
-    return { remove: [] };
+    return { remove };
+  },
+  sortItems: (items) =>
+    [...items].sort((a, b) => {
+      const ra = draftRank(a);
+      const rb = draftRank(b);
+      if (ra !== rb) return ra - rb;
+      const ao = Number(a.fields["order"]) || 0;
+      const bo = Number(b.fields["order"]) || 0;
+      if (ao !== bo) return bo - ao;
+      return String(b.fields["published"] ?? "").localeCompare(String(a.fields["published"] ?? ""));
+    }),
+  yamlFormat: {
+    quote: "none",
+    arrayStyle: "flow",
+    arrayItemQuote: "none",
+    overrides: {
+      password: { quote: "double" },
+      passwordHint: { quote: "double" },
+    },
   },
 };

@@ -62,13 +62,22 @@ function prune(backupDir: string, keep = BACKUP_KEEP): void {
   }
 }
 
-/** 备份单个文件 → {模块备份目录}/xxx_时间戳.bak.md；返回备份文件名 */
-export function backupFile(srcFile: string, backupDir: string): string {
+/**
+ * 备份单个文件 → {模块备份目录}/xxx_时间戳.bak.md；返回备份文件名
+ * relativeName 用于分组/嵌套模块：以 `__` 编码目录分隔符，避免不同分组下同名文件互相覆盖。
+ */
+export function backupFile(srcFile: string, backupDir: string, relativeName = path.basename(srcFile)): string {
   ensureDir(backupDir);
-  const name = backupFileName(path.basename(srcFile));
+  const safeRelative = relativeName.replace(/[/\\]/g, "__");
+  const name = backupFileName(safeRelative);
   fs.copyFileSync(srcFile, path.join(backupDir, name));
   prune(backupDir);
   return name;
+}
+
+/** 备份名中的分组编码还原为相对路径（配合 backupFile 的 relativeName 使用） */
+export function decodeBackupOrigin(origin: string): string {
+  return origin.replace(/__/g, "/");
 }
 
 /** 备份整个目录快照 → {模块备份目录}/{目录名}_时间戳.bak/；返回备份名 */

@@ -177,6 +177,38 @@ export const configTargets: ConfigTargetDef[] = [
     exportNames: ["analyticsConfig"],
     group: "互动功能",
   },
+  {
+    id: "circle",
+    name: "朋友圈 / 推文配置",
+    file: "circleConfig.ts",
+    exportNames: ["circleConfig"],
+    saveNote: "朋友圈数据来自外部 dataUrl；修改后需重新 build 生效",
+    group: "互动功能",
+  },
+  {
+    id: "cursor",
+    name: "自定义鼠标指针",
+    file: "cursorConfig.ts",
+    exportNames: ["cursorConfig"],
+    saveNote: "触屏与「减少动态效果」模式会自动禁用自定义指针",
+    group: "外观美化",
+  },
+  {
+    id: "font",
+    name: "全局字体配置",
+    file: "fontConfig.ts",
+    exportNames: ["fontConfig"],
+    saveNote: "fontFile 为空时使用系统默认字体；填写本地字体路径后全局生效",
+    group: "外观美化",
+  },
+  {
+    id: "externalBangumi",
+    name: "追番数据源配置",
+    file: "externalBangumiConfig.ts",
+    exportNames: ["externalBangumiConfig"],
+    saveNote: "外部追番数据源配置，修改后需重新 build 生效",
+    group: "内容与文章",
+  },
 ];
 
 /** target 标识 → 定义；未知 target 抛 404 */
