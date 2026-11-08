@@ -80,22 +80,39 @@ function unwrap(node: ts.Node): ts.Node {
   return node;
 }
 
-/** 标量字面量判定 */
+/**
+ * 常量字符串表达式求值：纯字符串字面量，或由字符串字面量 `+` 拼接的表达式
+ * （用于 announcementPopupConfig.content 这类多行字符串配置；非字面量返回 null）
+ */
+function concatStringValue(node: ts.Node): string | null {
+  if (ts.isStringLiteral(node)) return node.text;
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const left = concatStringValue(unwrap(node.left));
+    const right = concatStringValue(unwrap(node.right));
+    if (left !== null && right !== null) return left + right;
+  }
+  return null;
+}
+
+/** 标量字面量判定（含纯字符串拼接表达式） */
 function isScalar(node: ts.Node): boolean {
   return (
     ts.isStringLiteral(node) ||
     ts.isNumericLiteral(node) ||
     node.kind === ts.SyntaxKind.TrueKeyword ||
     node.kind === ts.SyntaxKind.FalseKeyword ||
-    node.kind === ts.SyntaxKind.NullKeyword
+    node.kind === ts.SyntaxKind.NullKeyword ||
+    concatStringValue(node) !== null
   );
 }
 
-/** 取标量值（支持 -1 形式） */
+/** 取标量值（支持 -1 形式与字符串拼接） */
 function scalarValue(node: ts.Node): unknown {
   if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.MinusToken) {
     return -Number((node.operand as ts.NumericLiteral).text);
   }
+  const concat = concatStringValue(node);
+  if (concat !== null) return concat;
   if (ts.isStringLiteral(node)) return node.text;
   if (ts.isNumericLiteral(node)) return Number(node.text);
   if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
