@@ -167,7 +167,9 @@ export const configTargets: ConfigTargetDef[] = [
     id: "announcement",
     name: "公告配置",
     file: "announcementConfig.ts",
-    exportNames: ["announcementConfig"],
+    exportNames: ["announcementConfig", "announcementPopupConfig"],
+    multiExport: true,
+    saveNote: "「公告配置」为顶部公告栏，「弹窗公告」为首次访问弹窗；修改后需重新 build 生效",
     group: "基础",
   },
   {
