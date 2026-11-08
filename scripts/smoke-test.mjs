@@ -141,7 +141,39 @@ await section("配置特殊 target（footer / navbar / pio / music）");
 
   r = await req("/api/config/music");
   assert(r.data.fields?.some((f) => f.keyPath === "local.playlist" && Array.isArray(f.value)), "music 含 local.playlist 对象数组整体字段");
-  assert(r.data.fields?.some((f) => /^local\.playlist\[\d+\]\./.test(f.keyPath)), "music 含 local.playlist[i].* 元素字段");
+  // 对象数组元素字段：用非空的 pio live2dWidgetConfig.model 校验（本地歌单可能为空）
+  const pioForArray = await req("/api/config/pio");
+  assert(
+    pioForArray.data.fields?.some((f) => /^live2dWidgetConfig\.model\[\d+\]\./.test(f.keyPath)),
+    "对象数组元素字段展开（pio model[i].*）",
+  );
+
+  // 公告 target 双导出：顶部公告 + 首次访问弹窗（含字符串拼接的 content）
+  r = await req("/api/config/announcement");
+  assert(r.data.fields?.some((f) => f.keyPath === "announcementConfig.title"), "announcement 含顶部公告字段");
+  const popupEnable = r.data.fields?.find((f) => f.keyPath === "announcementPopupConfig.enable");
+  assert(popupEnable !== undefined && typeof popupEnable.value === "boolean", "announcement 含弹窗开关（announcementPopupConfig.enable）");
+  const popupContent = r.data.fields?.find((f) => f.keyPath === "announcementPopupConfig.content");
+  assert(popupContent !== undefined && typeof popupContent.value === "string" && popupContent.value.length > 0,
+    "announcement 弹窗内容可解析（字符串拼接表达式）");
+
+  // 多导出写回：切换弹窗开关后还原
+  const origPopupEnable = popupEnable?.value;
+  r = await req("/api/config/announcement", {
+    method: "POST",
+    body: { changes: [{ keyPath: "announcementPopupConfig.enable", value: !origPopupEnable }] },
+  });
+  assert(r.status === 200 && r.data.saved >= 1, "弹窗开关保存成功（多导出写回）");
+  r = await req("/api/config/announcement");
+  assert(
+    r.data.fields?.find((f) => f.keyPath === "announcementPopupConfig.enable")?.value === !origPopupEnable,
+    "回读弹窗开关已修改",
+  );
+  r = await req("/api/config/announcement", {
+    method: "POST",
+    body: { changes: [{ keyPath: "announcementPopupConfig.enable", value: origPopupEnable }] },
+  });
+  assert(r.status === 200, "弹窗开关还原成功");
 
   r = await req("/api/config/circle");
   assert(r.status === 200 && Array.isArray(r.data.fields), "circle 配置可读（朋友圈数据源）");
